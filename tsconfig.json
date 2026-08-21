@@ -13,14 +13,21 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "paths": {
-      "@/*": ["./*"]
-    }
+  "paths": {
+  "@/components/providers/*": ["./src/components/providers/*"],
+  "@/components/layout/*": ["./src/components/layout/*"],
+  "@/components/dashboard/*": ["./components/dashboard/*"],
+  "@/components/ui/*": ["./components/ui/*"],
+  "@/features/*": ["./src/features/*"],
+  "@/lib/*": ["./lib/*"],
+  "@/*": ["./src/*"]
+}
   },
   "include": [
     "next-env.d.ts",
