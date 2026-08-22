@@ -120,11 +120,18 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
+
+  html,
   body {
-    @apply bg-background text-foreground;
-  }
-  html {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
     @apply font-sans;
+  }
+
+  body {
+    @apply bg-black text-white;
   }
 }

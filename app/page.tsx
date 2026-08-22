@@ -5,10 +5,16 @@ import SwapCard from "@/features/swap/components/SwapCard";
 export default function Home() {
   return (
     <MainLayout>
-      <StatsGrid />
+      <div className="flex flex-col gap-6">
+        {/* Swap en premier sur mobile */}
+        <div className="order-1 md:order-2">
+          <SwapCard />
+        </div>
 
-      <div className="mt-6">
-        <SwapCard />
+        {/* Dashboard en dessous sur mobile, en premier sur PC */}
+        <div className="order-2 md:order-1">
+          <StatsGrid />
+        </div>
       </div>
     </MainLayout>
   );
