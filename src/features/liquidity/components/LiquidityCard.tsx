@@ -55,7 +55,8 @@ export default function LiquidityCard() {
 
   const [solAmount, setSolAmount] =
     useState("0.0005");
-
+const [localError, setLocalError] =
+  useState("");
   const poolPrices = poolData
     ? calculatePoolPrices(poolData)
     : null;
@@ -97,6 +98,7 @@ export default function LiquidityCard() {
   // ==================================================
 
   async function handleAddLiquidity() {
+setLocalError("");
     if (!connected || !publicKey) {
       await connect();
       return;
@@ -203,11 +205,17 @@ export default function LiquidityCard() {
 
       await loadPool();
     } catch (error) {
-      console.error(
-        "Erreur ajout liquidité :",
-        error
-      );
-    }
+  console.error(
+    "Erreur ajout liquidité :",
+    error
+  );
+
+  setLocalError(
+    error instanceof Error
+      ? error.message
+      : "Erreur inconnue pendant l'ajout de liquidité."
+  );
+}
   }
 
   // ==================================================
@@ -215,6 +223,7 @@ export default function LiquidityCard() {
   // ==================================================
 
   async function handleRemoveLiquidity() {
+setLocalError("");
     if (!connected || !publicKey) {
       await connect();
       return;
@@ -309,11 +318,17 @@ export default function LiquidityCard() {
 
       await loadPool();
     } catch (error) {
-      console.error(
-        "Erreur retrait liquidité :",
-        error
-      );
-    }
+  console.error(
+    "Erreur retrait liquidité :",
+    error
+  );
+
+  setLocalError(
+    error instanceof Error
+      ? error.message
+      : "Erreur inconnue pendant le retrait."
+  );
+}
   }
 
   // ==================================================
@@ -335,17 +350,17 @@ export default function LiquidityCard() {
   // ==================================================
 
   return (
-    <div className="w-full max-w-md space-y-5">
+    <div className="w-full max-w-md space-y-4 md:space-y-5">
 
       {/* ==============================================
           INFORMATIONS DU POOL
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
+      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
 
         <div className="mb-5 flex items-center justify-between">
 
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl md:text-2xl font-bold">
             Pool ZTC / WSOL
           </h2>
 
@@ -372,7 +387,7 @@ export default function LiquidityCard() {
           <div className="space-y-3">
 
             {poolPrices && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                 <div className="rounded-xl border p-3">
 
@@ -439,7 +454,7 @@ export default function LiquidityCard() {
 
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
               <div className="rounded-xl border p-3">
 
@@ -514,7 +529,7 @@ export default function LiquidityCard() {
           AJOUT DE LIQUIDITÉ
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
+      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
 
         <h2 className="mb-5 text-center text-2xl font-bold">
           Ajouter de la liquidité
@@ -570,14 +585,18 @@ export default function LiquidityCard() {
             ? "Ajouter la liquidité"
             : "Connecter le wallet"}
         </button>
-
+{localError && (
+  <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+    {localError}
+  </div>
+)}
       </div>
 
       {/* ==============================================
           RETRAIT DE LIQUIDITÉ
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
+      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
 
         <h2 className="mb-2 text-center text-2xl font-bold">
           Retirer la liquidité

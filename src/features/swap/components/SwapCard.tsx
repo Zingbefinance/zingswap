@@ -204,14 +204,14 @@ useEffect(() => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-white">
+    <h2 className="text-xl md:text-2xl font-bold text-white">  
         Swap
       </h2>
 
-      <div className="mt-8 space-y-5">
+      <div className="mt-6 md:mt-8 space-y-4 md:space-y-5">
 
         {/* FROM */}
-        <div className="rounded-xl bg-zinc-900 p-5">
+        <div className="rounded-xl bg-zinc-900 p-4 md:p-5">
 
           <p className="text-zinc-400">
             From
@@ -258,14 +258,14 @@ useEffect(() => {
               placeholder="0.0"
               disabled={loading}
               className="
-                w-full
-                bg-transparent
-                text-right
-                text-2xl
-                text-white
-                outline-none
-                disabled:opacity-50
-              "
+  w-full
+  bg-transparent
+  text-right
+  text-xl md:text-2xl
+  text-white
+  outline-none
+  disabled:opacity-50
+"
             />
 
           </div>
@@ -291,16 +291,16 @@ useEffect(() => {
               setMessage("");
             }}
             className="
-              rounded-full
-              bg-zinc-800
-              p-3
-              text-white
-              transition
-              hover:bg-cyan-500
-              hover:text-black
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
+  rounded-full
+  bg-zinc-800
+  p-2 md:p-3
+  text-white
+  transition
+  hover:bg-cyan-500
+  hover:text-black
+  disabled:cursor-not-allowed
+  disabled:opacity-50
+"
           >
             ⇅
           </button>
@@ -308,7 +308,7 @@ useEffect(() => {
         </div>
 
         {/* TO */}
-        <div className="rounded-xl bg-zinc-900 p-5">
+        <div className="rounded-xl bg-zinc-900 p-4 md:p-5">
 
           <p className="text-zinc-400">
             To
@@ -352,13 +352,13 @@ useEffect(() => {
   }
   readOnly
   className="
-    w-full
-    bg-transparent
-    text-right
-    text-2xl
-    text-zinc-500
-    outline-none
-  "
+  w-full
+  bg-transparent
+  text-right
+  text-xl md:text-2xl
+  text-zinc-500
+  outline-none
+"
 />
 
           </div>
