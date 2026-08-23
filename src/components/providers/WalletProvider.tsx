@@ -1,5 +1,5 @@
 "use client";
-
+import { TokenProvider } from "./TokenContext";
 import { ReactNode, useMemo } from "react";
 import {
   ConnectionProvider,
@@ -31,12 +31,14 @@ export default function WalletProvider({ children }: Props) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
-      </SolanaWalletProvider>
-    </ConnectionProvider>
+   <ConnectionProvider endpoint={endpoint}>
+  <SolanaWalletProvider wallets={wallets} autoConnect>
+    <WalletModalProvider>
+      <TokenProvider>
+        {children}
+      </TokenProvider>
+    </WalletModalProvider>
+  </SolanaWalletProvider>
+</ConnectionProvider> 
   );
 }

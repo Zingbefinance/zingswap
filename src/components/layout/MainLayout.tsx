@@ -20,7 +20,7 @@ interface Props {
 const mobileMenu = [
   { icon: ArrowLeftRight, label: "Swap", href: "/" },
   { icon: Droplets, label: "Liquidity", href: "/liquidity" },
-  { icon: BarChart3, label: "Analytics", href: "/analytics" },
+  { icon: BarChart3, label: "Graphique", href: "/analytics" },
   { icon: Wallet, label: "Portfolio", href: "/portfolio" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];

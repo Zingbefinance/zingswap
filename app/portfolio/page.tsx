@@ -1,113 +1,151 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-
 import MainLayout from "@/components/layout/MainLayout";
-import { TOKENS } from "@/lib/tokens/tokens";
-
+import { Wallet, Coins, RefreshCw } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import useWalletInfo from "../hooks/useWalletInfo";
 export default function PortfolioPage() {
-  const { connection } = useConnection();
-  const { publicKey, connected } = useWallet();
+  const { connected, publicKey } = useWallet();
 
-  const [solBalance, setSolBalance] = useState("0.0000");
-  const [ztcBalance, setZtcBalance] = useState("0.0000");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadBalances = async () => {
-      if (!connected || !publicKey) {
-        setSolBalance("0.0000");
-        setZtcBalance("0.0000");
-        return;
-      }
-
-      try {
-        // SOL
-        const lamports = await connection.getBalance(publicKey);
-
-        if (!cancelled) {
-          setSolBalance((lamports / 1_000_000_000).toFixed(4));
-        }
-
-        // ZTC
-        const ztcToken = TOKENS.find((token) => token.symbol === "ZTC");
-
-        if (!ztcToken) {
-          return;
-        }
-
-        try {
-          const ata = getAssociatedTokenAddressSync(
-            new PublicKey(ztcToken.mint),
-            publicKey
-          );
-
-          const balance = await connection.getTokenAccountBalance(ata);
-
-          if (!cancelled) {
-            setZtcBalance(
-              Number(balance.value.uiAmount ?? 0).toFixed(4)
-            );
-          }
-        } catch {
-          if (!cancelled) {
-            setZtcBalance("0.0000");
-          }
-        }
-      } catch (error) {
-        console.error("Erreur lecture balances :", error);
-      }
-    };
-
-    loadBalances();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [connection, publicKey, connected]);
+const {
+  solBalance,
+  zingBalance,
+  tokens,
+} = useWalletInfo();
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h1 className="text-3xl font-bold text-white">Portfolio</h1>
 
-          <p className="mt-2 text-zinc-400">
-            Soldes réels du wallet connecté.
+        {/* En-tête */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+          <div className="flex items-center gap-3">
+            <Wallet className="text-cyan-400" size={28} />
+
+            <div>
+              <h1 className="text-3xl font-bold text-white">
+                Portfolio
+              </h1>
+
+              <p className="mt-2 text-zinc-400">
+                Aperçu de votre wallet Solana.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Wallet */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+
+          {connected ? (
+            <>
+              <p className="text-zinc-400">Wallet connecté</p>
+
+              <p className="mt-2 break-all font-mono text-sm text-white">
+                {publicKey?.toBase58()}
+              </p>
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <Wallet size={48} className="mx-auto text-zinc-500" />
+
+              <p className="mt-4 text-zinc-300">
+                Connectez votre wallet pour afficher votre portefeuille.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Actifs */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                Vos actifs
+              </h2>
+
+              <p className="text-sm text-zinc-400">
+                Les tokens détectés apparaîtront ici.
+              </p>
+            </div>
+
+            <button className="rounded-xl bg-zinc-900 p-2 hover:bg-zinc-800 transition">
+              <RefreshCw size={18} className="text-cyan-400" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+
+            <div className="flex items-center justify-between rounded-xl bg-zinc-900 p-4">
+              <div className="flex items-center gap-3">
+                <Coins className="text-cyan-400" />
+
+                <div>
+                  <p className="font-semibold text-white">SOL</p>
+                  <p className="text-sm text-zinc-400">
+                    Solana
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-white">
+  {solBalance.toFixed(4)}
+</p>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-zinc-900 p-4">
+              <div className="flex items-center gap-3">
+                <Coins className="text-cyan-400" />
+
+                <div>
+                  <p className="font-semibold text-white">ZTC</p>
+                  <p className="text-sm text-zinc-400">
+                    Zing Token
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-white">
+  {zingBalance.toLocaleString()}
+</p>
+{tokens
+  .filter((token) => token.symbol !== "ZTC")
+  .map((token) => (
+    <div
+      key={token.mint}
+      className="flex items-center justify-between rounded-xl bg-zinc-900 p-4"
+    >
+      <div className="flex items-center gap-3">
+        <Coins className="text-cyan-400" />
+
+        <div>
+          <p className="font-semibold text-white">
+            {token.symbol}
+          </p>
+
+          <p className="text-sm text-zinc-400">
+            SPL Token
           </p>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-            <p className="text-sm text-zinc-400">SOL</p>
+      <p className="text-white">
+        {token.amount.toLocaleString()}
+      </p>
+    </div>
+  ))}
+            </div>
 
-            <h2 className="mt-3 text-3xl font-bold text-white">
-              {solBalance}
-            </h2>
-          </div>
+            <div className="rounded-xl border border-dashed border-cyan-500/30 bg-zinc-900 p-4 text-center">
+              <p className="text-zinc-400">
+                Les tokens SPL seront récupérés automatiquement à l'étape suivante.
+              </p>
+            </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-            <p className="text-sm text-zinc-400">ZTC</p>
-
-            <h2 className="mt-3 text-3xl font-bold text-white">
-              {ztcBalance}
-            </h2>
           </div>
         </div>
 
-        {connected && publicKey && (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-            <p className="text-sm text-zinc-400">Adresse du wallet</p>
-
-            <p className="mt-2 break-all text-white">
-              {publicKey.toBase58()}
-            </p>
-          </div>
-        )}
       </div>
     </MainLayout>
   );

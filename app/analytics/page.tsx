@@ -1,98 +1,183 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useConnection } from "@solana/wallet-adapter-react";
-
 import MainLayout from "@/components/layout/MainLayout";
+import { BarChart3, Search, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 
-export default function AnalyticsPage() {
-  const { connection } = useConnection();
+type Pair = {
+  baseToken: { symbol: string; name: string };
+  quoteToken: { symbol: string };
+  pairAddress: string;
+  dexId: string;
+  priceUsd?: string;
+  liquidity?: { usd?: number };
+  volume?: { h24?: number };
+  url: string;
+};
 
-  const [slot, setSlot] = useState("--");
-  const [blockHeight, setBlockHeight] = useState("--");
-  const [epoch, setEpoch] = useState("--");
-  const [tps, setTps] = useState("--");
+export default function ChartPage() {
+  const [query, setQuery] = useState("ZTC");
+  const [loading, setLoading] = useState(false);
+  const [pair, setPair] = useState<Pair | null>(null);
+
+  const searchToken = async (value: string) => {
+    if (!value.trim()) return;
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(
+          value
+        )}`
+      );
+
+      const data = await res.json();
+
+      const solanaPair = data.pairs?.find(
+        (p: any) => p.chainId === "solana"
+      );
+
+      setPair(solanaPair || null);
+    } catch (err) {
+      console.error(err);
+      setPair(null);
+    }
+
+    setLoading(false);
+  };
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadAnalytics = async () => {
-      try {
-        const [
-          currentSlot,
-          currentBlockHeight,
-          epochInfo,
-          samples,
-        ] = await Promise.all([
-          connection.getSlot(),
-          connection.getBlockHeight(),
-          connection.getEpochInfo(),
-          connection.getRecentPerformanceSamples(1),
-        ]);
-
-        if (cancelled) return;
-
-        setSlot(currentSlot.toLocaleString());
-        setBlockHeight(currentBlockHeight.toLocaleString());
-        setEpoch(epochInfo.epoch.toString());
-
-        if (samples.length > 0) {
-          const sample = samples[0];
-          const currentTps =
-            sample.numTransactions / sample.samplePeriodSecs;
-
-          setTps(currentTps.toFixed(0));
-        }
-      } catch (error) {
-        console.error("Erreur Analytics :", error);
-      }
-    };
-
-    loadAnalytics();
-
-    const interval = setInterval(loadAnalytics, 10000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [connection]);
-
-  const cards = [
-    { title: "Current Slot", value: slot },
-    { title: "Block Height", value: blockHeight },
-    { title: "Current Epoch", value: epoch },
-    { title: "Estimated TPS", value: tps },
-  ];
+    searchToken("ZTC");
+  }, []);
 
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* En-tête */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h1 className="text-3xl font-bold text-white">
-            Analytics
-          </h1>
+          <div className="flex items-center gap-3">
+            <BarChart3 className="text-cyan-400" size={28} />
 
-          <p className="mt-2 text-zinc-400">
-            Données on-chain en temps réel du réseau Solana.
-          </p>
+            <div>
+              <h1 className="text-3xl font-bold text-white">
+                Graphique
+              </h1>
+
+              <p className="mt-2 text-zinc-400">
+                Rechercher n'importe quel token Solana.
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map((card) => (
-            <div
-              key={card.title}
-              className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5"
-            >
-              <p className="text-sm text-zinc-400">
-                {card.title}
-              </p>
+        {/* Recherche */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 space-y-4">
+          <div className="flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-3">
+            <Search size={18} className="text-zinc-400" />
 
-              <h2 className="mt-3 text-3xl font-bold text-white break-words">
-                {card.value}
-              </h2>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ex : ZTC, BONK, JUP ou une adresse Solana"
+              className="w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") searchToken(query);
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => searchToken(query)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-4 py-3 font-semibold text-black transition hover:bg-cyan-400"
+          >
+            <Search size={18} />
+            {loading ? "Recherche..." : "Rechercher"}
+          </button>
+        </div>
+
+        {/* Résultat */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          {pair ? (
+            <>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-zinc-400">Paire détectée</p>
+
+                  <h2 className="text-2xl font-bold text-white">
+                    {pair.baseToken.symbol}/{pair.quoteToken.symbol}
+                  </h2>
+
+                  <p className="mt-1 text-sm text-zinc-500">
+                    DEX : {pair.dexId}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => window.open(pair.url, "_blank")}
+                  className="flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 font-semibold text-black transition hover:bg-cyan-400"
+                >
+                  <ExternalLink size={18} />
+                  Ouvrir sur DexScreener
+                </button>
+              </div>
+
+              {/* Graphique intégré */}
+              <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
+                <iframe
+                  src={`https://dexscreener.com/solana/${pair.pairAddress}?embed=1&theme=dark`}
+                  title="DexScreener Chart"
+                  className="h-[520px] w-full border-0"
+                  allowFullScreen
+                />
+              </div>
+
+              {/* Statistiques */}
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <div className="rounded-xl bg-zinc-900 p-4">
+                  <p className="text-zinc-400">Prix</p>
+
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {pair.priceUsd ? `$${pair.priceUsd}` : "--"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-zinc-900 p-4">
+                  <p className="text-zinc-400">Volume 24h</p>
+
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {pair.volume?.h24
+                      ? `$${Math.round(pair.volume.h24).toLocaleString()}`
+                      : "--"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-zinc-900 p-4">
+                  <p className="text-zinc-400">Liquidité</p>
+
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {pair.liquidity?.usd
+                      ? `$${Math.round(pair.liquidity.usd).toLocaleString()}`
+                      : "--"}
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex h-[420px] items-center justify-center rounded-2xl border border-dashed border-cyan-500/30 bg-zinc-900 text-center">
+              <div>
+                <BarChart3 size={54} className="mx-auto text-cyan-400" />
+
+                <h3 className="mt-4 text-xl font-semibold text-white">
+                  Aucun token trouvé
+                </h3>
+
+                <p className="mt-2 text-zinc-400">
+                  Essaie BONK, JUP, WIF, ZTC ou une adresse Solana.
+                </p>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </MainLayout>

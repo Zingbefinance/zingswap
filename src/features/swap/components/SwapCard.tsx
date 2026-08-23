@@ -1,5 +1,5 @@
 "use client";
-
+import { useSelectedToken } from "@/components/providers/TokenContext";
 import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -23,6 +23,8 @@ export default function SwapCard() {
   const [message, setMessage] = useState("");
 
   const { connected, connect, publicKey } = useWallet();
+  
+  const { setSelectedToken } = useSelectedToken();
   const { setVisible } = useWalletModal();
 const { connection } = useConnection();
 const { swap, getQuote } = useSwap();
@@ -227,7 +229,14 @@ useEffect(() => {
                   onSelect={(token) => {
                     if (token.symbol === toToken.symbol) {
                       setFromToken(token);
-                      setToToken(fromToken);
+
+setSelectedToken({
+  symbol: token.symbol,
+  name: token.name,
+  mint: token.mint,
+});
+
+setToToken(fromToken);
                     } else {
                       setFromToken(token);
                     }
@@ -323,8 +332,15 @@ useEffect(() => {
                   tokens={TOKENS}
                   onSelect={(token) => {
                     if (token.symbol === fromToken.symbol) {
-                      setToToken(token);
-                      setFromToken(toToken);
+                     setToToken(token);
+
+setSelectedToken({
+  symbol: token.symbol,
+  name: token.name,
+  mint: token.mint,
+});
+
+setFromToken(toToken); 
                     } else {
                       setToToken(token);
                     }

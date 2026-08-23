@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-
+type WalletToken = {
+  mint: string;
+  symbol: string;
+  amount: number;
+  decimals: number;
+};
 const connection = new Connection(
   "https://api.mainnet-beta.solana.com",
   "confirmed"
@@ -12,18 +17,47 @@ const connection = new Connection(
 
 // Mint du ZING TOKEN
 const ZING_MINT = new PublicKey(
+  
   "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu"
 );
+const TOKEN_REGISTRY: Record<
+  string,
+  { symbol: string; name: string }
+> = {
+  [ZING_MINT.toBase58()]: {
+    symbol: "ZTC",
+    name: "Zing Token",
+  },
 
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263PB263": {
+    symbol: "BONK",
+    name: "Bonk",
+  },
+
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": {
+    symbol: "JUP",
+    name: "Jupiter",
+  },
+
+  "EKpQGSJtjMFqKZ6uJ3iM3Y6L6i9n9M2J7sKnzGWxZMF": {
+    symbol: "WIF",
+    name: "dogwifhat",
+  },
+
+  "Es9vMFrzaCERmJfrF4H2t6wQBaLtgBoQxGc1dQc5sK7": {
+    symbol: "USDT",
+    name: "Tether",
+  },
+};
 export default function useWalletInfo() {
   const { publicKey, connected } = useWallet();
 useEffect(() => {
   console.log("Wallet connecté :", publicKey?.toBase58());
 }, [publicKey]);
-
-  const [address, setAddress] = useState("");
-  const [solBalance, setSolBalance] = useState(0);
-  const [zingBalance, setZingBalance] = useState(0);
+const [address, setAddress] = useState("");
+const [solBalance, setSolBalance] = useState(0);
+const [zingBalance, setZingBalance] = useState(0);
+const [tokens, setTokens] = useState<WalletToken[]>([]);
 
   useEffect(() => {
     async function loadWallet() {
@@ -54,23 +88,36 @@ console.log("Lecture du wallet :", publicKey.toBase58());
 console.log("Wallet :", publicKey.toBase58());
 console.log("Token accounts :", tokenAccounts.value);
 
-        let balance = 0;
+let balance = 0;
 
-        tokenAccounts.value.forEach((account) => {
-          const info: any =
-            account.account.data.parsed.info;
+const walletTokens: WalletToken[] = [];
 
-          if (info.mint === ZING_MINT.toBase58()) {
-            balance =
-              Number(info.tokenAmount.amount) /
-              Math.pow(
-                10,
-                info.tokenAmount.decimals
-              );
-          }
-        });
+tokenAccounts.value.forEach((account) => {
+  const info: any = account.account.data.parsed.info;
 
-        setZingBalance(balance);
+  const amount =
+    Number(info.tokenAmount.amount) /
+    Math.pow(10, info.tokenAmount.decimals);
+
+  if (amount <= 0) return;
+
+  const registry =
+  TOKEN_REGISTRY[info.mint];
+
+walletTokens.push({
+  mint: info.mint,
+  symbol: registry?.symbol || "TOKEN",
+  amount,
+  decimals: info.tokenAmount.decimals,
+});
+
+  if (info.mint === ZING_MINT.toBase58()) {
+    balance = amount;
+  }
+});
+
+setTokens(walletTokens);
+setZingBalance(balance);
 
       } catch (err) {
         console.error(err);
@@ -80,10 +127,11 @@ console.log("Token accounts :", tokenAccounts.value);
     loadWallet();
   }, [connected, publicKey]);
 
-  return {
-    connected,
-    address,
-    solBalance,
-    zingBalance,
-  };
+return {
+  connected,
+  address,
+  solBalance,
+  zingBalance,
+  tokens,
+};
 }
