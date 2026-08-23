@@ -1,6 +1,22 @@
+"use client";
+
 import { Search, Wallet } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 export default function Topbar() {
+  const { connected, publicKey, disconnect } = useWallet();
+  const { setVisible } = useWalletModal();
+
+  const handleWallet = async () => {
+  if (!connected) {
+    setVisible(true);
+    return;
+  }
+
+  await disconnect();
+};
+
   return (
     <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:px-6 md:py-4">
       {/* Ligne du haut */}
@@ -9,11 +25,18 @@ export default function Topbar() {
           Dashboard
         </h1>
 
-        <button className="flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 font-semibold text-black transition hover:bg-cyan-400">
+        <button
+          onClick={handleWallet}
+          className="flex cursor-pointer items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 font-semibold text-black transition hover:bg-cyan-400 active:scale-95"
+        >
           <Wallet size={18} />
 
           <span className="hidden sm:inline">
-            Connect Wallet
+            {connected
+              ? `${publicKey?.toBase58().slice(0, 4)}...${publicKey
+                  ?.toBase58()
+                  .slice(-4)}`
+              : "Connect Wallet"}
           </span>
         </button>
       </div>

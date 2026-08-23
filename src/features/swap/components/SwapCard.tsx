@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 import TokenButton from "./TokenButton";
@@ -22,6 +23,7 @@ export default function SwapCard() {
   const [message, setMessage] = useState("");
 
   const { connected, connect, publicKey } = useWallet();
+  const { setVisible } = useWalletModal();
 const { connection } = useConnection();
 const { swap, getQuote } = useSwap();
 const [fromBalance, setFromBalance] = useState("0.0000");
@@ -158,15 +160,9 @@ useEffect(() => {
     setMessage("");
 
     if (!connected) {
-      try {
-        await connect();
-      } catch (error) {
-        console.error("Erreur connexion wallet :", error);
-        setMessage("Impossible de connecter le wallet.");
-      }
-
-      return;
-    }
+  setVisible(true);
+  return;
+}
 
     if (!fromAmount.trim()) {
       setMessage("Entre un montant à échanger.");
