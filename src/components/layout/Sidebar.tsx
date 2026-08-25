@@ -10,37 +10,58 @@ import {
   Wallet,
   Settings,
 } from "lucide-react";
+import { useLanguage } from "@/components/providers/LanguageContext";
 
 const menu = [
   {
     icon: ArrowLeftRight,
-    label: "Swap",
+    key: "swap",
     href: "/",
   },
   {
     icon: Droplets,
-    label: "Liquidity",
+    key: "liquidity",
     href: "/liquidity",
   },
   {
     icon: BarChart3,
-    label: "Analytics",
+    key: "analytics",
     href: "/analytics",
   },
   {
     icon: Wallet,
-    label: "Portfolio",
+    key: "portfolio",
     href: "/portfolio",
   },
   {
     icon: Settings,
-    label: "Settings",
+    key: "settings",
     href: "/settings",
   },
 ];
 
+const labels = {
+  Français: {
+    swap: "Swap",
+    liquidity: "Liquidité",
+    analytics: "Graphique",
+    portfolio: "Portefeuille",
+    settings: "Paramètres",
+  },
+  English: {
+    swap: "Swap",
+    liquidity: "Liquidity",
+    analytics: "Analytics",
+    portfolio: "Portfolio",
+    settings: "Settings",
+  },
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { language } = useLanguage();
+
+  const currentLabels = labels[language];
 
   return (
     <aside className="h-screen w-72 border-r border-zinc-800 bg-zinc-950 p-6">
@@ -53,7 +74,7 @@ export default function Sidebar() {
 
           return (
             <Link
-              key={item.label}
+              key={item.key}
               href={item.href}
               className={`flex w-full items-center gap-4 rounded-xl px-4 py-3 transition ${
                 active
@@ -62,7 +83,7 @@ export default function Sidebar() {
               }`}
             >
               <Icon size={20} />
-              <span>{item.label}</span>
+              <span>{currentLabels[item.key as keyof typeof currentLabels]}</span>
             </Link>
           );
         })}

@@ -95,13 +95,23 @@ export function getVaultPdas(
 export function getPositionPda(
   programId: PublicKey = ZINGSWAP_PROGRAM_ID,
   poolPda: PublicKey,
-  user: PublicKey
+  user: PublicKey,
+  tickLower: number,
+  tickUpper: number
 ): PublicKey {
+  const tickLowerBuffer = Buffer.alloc(4);
+  tickLowerBuffer.writeInt32LE(tickLower, 0);
+
+  const tickUpperBuffer = Buffer.alloc(4);
+  tickUpperBuffer.writeInt32LE(tickUpper, 0);
+
   return PublicKey.findProgramAddressSync(
     [
       Buffer.from("position"),
       poolPda.toBuffer(),
       user.toBuffer(),
+      tickLowerBuffer,
+      tickUpperBuffer,
     ],
     programId
   )[0];

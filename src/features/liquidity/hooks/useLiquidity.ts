@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { BN } from "@coral-xyz/anchor";
+
 import {
   useConnection,
   useWallet,
 } from "@solana/wallet-adapter-react";
+
 import {
   PublicKey,
   SendTransactionError,
@@ -25,9 +27,9 @@ export function useLiquidity() {
   const wallet = useWallet();
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(
-    null
-  );
+
+  const [message, setMessage] =
+    useState<string | null>(null);
 
   // ==================================================
   // AJOUT DE LIQUIDITÉ
@@ -38,7 +40,9 @@ export function useLiquidity() {
     userTokenA: PublicKey,
     userTokenB: PublicKey,
     amountA: BN,
-    amountB: BN
+    amountB: BN,
+    tickLower: number,
+    tickUpper: number
   ) {
     if (!publicKey) {
       throw new Error("Connecte ton wallet.");
@@ -63,6 +67,8 @@ export function useLiquidity() {
           userTokenB,
           amountA,
           amountB,
+          tickLower,
+          tickUpper,
         });
 
       // --------------------------------------------------
@@ -149,7 +155,9 @@ export function useLiquidity() {
   async function removeLiquidity(
     pool: PublicKey,
     userTokenA: PublicKey,
-    userTokenB: PublicKey
+    userTokenB: PublicKey,
+    tickLower: number,
+    tickUpper: number
   ) {
     if (!publicKey) {
       throw new Error("Connecte ton wallet.");
@@ -172,6 +180,8 @@ export function useLiquidity() {
           pool,
           userTokenA,
           userTokenB,
+          tickLower,
+          tickUpper,
         });
 
       // --------------------------------------------------

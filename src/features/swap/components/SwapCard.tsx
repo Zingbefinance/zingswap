@@ -65,6 +65,28 @@ const getTokenBalance = async (token: Token): Promise<string> => {
   }
 };
 
+
+ const refreshBalances = async () => {
+  if (!publicKey || !connected) {
+    setFromBalance("0.0000");
+    setToBalance("0.0000");
+    return;
+  }
+
+  try {
+    const [nextFromBalance, nextToBalance] =
+      await Promise.all([
+        getTokenBalance(fromToken),
+        getTokenBalance(toToken),
+      ]);
+
+    setFromBalance(nextFromBalance);
+    setToBalance(nextToBalance);
+  } catch (error) {
+    console.error("Erreur actualisation des balances :", error);
+  }
+};
+
 useEffect(() => {
   let cancelled = false;
 
@@ -100,7 +122,7 @@ useEffect(() => {
   fromToken,
   toToken,
   connection,
-]);
+]); 
 useEffect(() => {
   let cancelled = false;
 
@@ -159,46 +181,70 @@ useEffect(() => {
   getQuote,
 ]);
   const handleSwap = async () => {
-    setMessage("");
+  setMessage("");
 
-    if (!connected) {
-  setVisible(true);
-  return;
-}
+  if (!connected) {
+    setVisible(true);
+    return;
+  }
 
-    if (!fromAmount.trim()) {
-      setMessage("Entre un montant à échanger.");
-      return;
-    }
+  if (!fromAmount.trim()) {
+    setMessage("Entre un montant à échanger.");
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const result = await swap({
-        amount: fromAmount,
-        fromMint: new PublicKey(fromToken.mint),
-        toMint: new PublicKey(toToken.mint),
-        minAmountOut: "0",
-      });
+  try {
+    // Nouveau quote juste avant l'exécution du swap
+    const quote = await getQuote({
+      amount: fromAmount,
+      fromMint: new PublicKey(fromToken.mint),
+      toMint: new PublicKey(toToken.mint),
+    });
 
-      console.log("Swap exécuté :", result.signature);
+    // Slippage : 0,50 %
+    const slippageBps = 50;
 
-      setMessage(`Swap confirmé : ${result.signature}`);
+    const quoteAmountOutRaw = BigInt(
+      quote.amountOutRaw
+    );
 
-      setFromAmount("");
-    } catch (error) {
-      console.error("Erreur swap :", error);
+    // Montant minimum accepté après slippage
+    const minAmountOutRaw =
+      (quoteAmountOutRaw *
+        BigInt(10_000 - slippageBps)) /
+      BigInt(10_000);
 
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Erreur inconnue pendant le swap.";
+    const result = await swap({
+      amount: fromAmount,
+      fromMint: new PublicKey(fromToken.mint),
+      toMint: new PublicKey(toToken.mint),
+      minAmountOutRaw: minAmountOutRaw.toString(),
+    });
 
-      setMessage(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log("Swap exécuté :", result.signature);
+
+    setMessage(
+      `Swap confirmé : ${result.signature}`
+    );
+
+    setFromAmount("");
+
+    await refreshBalances();
+  } catch (error) {
+    console.error("Erreur swap :", error);
+
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Erreur inconnue pendant le swap.";
+
+    setMessage(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div>

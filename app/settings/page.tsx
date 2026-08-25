@@ -1,5 +1,5 @@
 "use client";
-
+import { useLanguage } from "@/components/providers/LanguageContext";
 import MainLayout from "@/components/layout/MainLayout";
 import {
   Settings,
@@ -11,11 +11,48 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+type Language = "Français" | "English";
+
+const translations = {
+  Français: {
+    title: "Paramètres",
+    subtitle: "Configurez votre expérience ZingSwap.",
+    slippage: "Slippage",
+    network: "Réseau",
+    language: "Langue",
+    notifications: "Notifications",
+    notificationDescription: "Recevoir les annonces et alertes.",
+    wallet: "Wallet",
+    walletDescription:
+      "Les paramètres avancés du wallet seront ajoutés ici.",
+    security: "Sécurité",
+    securityDescription:
+      "Les protections anti-slippage et validations seront intégrées progressivement.",
+  },
+  English: {
+    title: "Settings",
+    subtitle: "Configure your ZingSwap experience.",
+    slippage: "Slippage",
+    network: "Network",
+    language: "Language",
+    notifications: "Notifications",
+    notificationDescription: "Receive announcements and alerts.",
+    wallet: "Wallet",
+    walletDescription:
+      "Advanced wallet settings will be added here.",
+    security: "Security",
+    securityDescription:
+      "Anti-slippage protections and validations will be integrated progressively.",
+  },
+};
+
 export default function SettingsPage() {
   const [slippage, setSlippage] = useState("0.5%");
   const [network, setNetwork] = useState("Mainnet");
-  const [language, setLanguage] = useState("Français");
+  
   const [notifications, setNotifications] = useState(true);
+  const { language, setLanguage } = useLanguage();
+  const t = translations[language];
 
   return (
     <MainLayout>
@@ -24,15 +61,18 @@ export default function SettingsPage() {
         {/* En-tête */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
           <div className="flex items-center gap-3">
-            <Settings className="text-cyan-400" size={28} />
+            <Settings
+              className="text-cyan-400"
+              size={28}
+            />
 
             <div>
               <h1 className="text-3xl font-bold text-white">
-                Paramètres
+                {t.title}
               </h1>
 
               <p className="mt-2 text-zinc-400">
-                Configurez votre expérience ZingSwap.
+                {t.subtitle}
               </p>
             </div>
           </div>
@@ -42,8 +82,9 @@ export default function SettingsPage() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
           <div className="mb-3 flex items-center gap-3">
             <Gauge className="text-cyan-400" />
+
             <h2 className="text-xl font-bold text-white">
-              Slippage
+              {t.slippage}
             </h2>
           </div>
 
@@ -68,8 +109,9 @@ export default function SettingsPage() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
           <div className="mb-3 flex items-center gap-3">
             <Globe className="text-cyan-400" />
+
             <h2 className="text-xl font-bold text-white">
-              Réseau
+              {t.network}
             </h2>
           </div>
 
@@ -94,25 +136,28 @@ export default function SettingsPage() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
           <div className="mb-3 flex items-center gap-3">
             <Globe className="text-cyan-400" />
+
             <h2 className="text-xl font-bold text-white">
-              Langue
+              {t.language}
             </h2>
           </div>
 
           <div className="flex gap-2">
-            {["Français", "English"].map((value) => (
-              <button
-                key={value}
-                onClick={() => setLanguage(value)}
-                className={`rounded-xl px-4 py-2 font-medium transition ${
-                  language === value
-                    ? "bg-cyan-500 text-black"
-                    : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
+            {(["Français", "English"] as Language[]).map(
+              (value) => (
+                <button
+                  key={value}
+                  onClick={() => setLanguage(value)}
+                  className={`rounded-xl px-4 py-2 font-medium transition ${
+                    language === value
+                      ? "bg-cyan-500 text-black"
+                      : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                  }`}
+                >
+                  {value}
+                </button>
+              )
+            )}
           </div>
         </div>
 
@@ -124,17 +169,19 @@ export default function SettingsPage() {
 
               <div>
                 <h2 className="font-bold text-white">
-                  Notifications
+                  {t.notifications}
                 </h2>
 
                 <p className="text-sm text-zinc-400">
-                  Recevoir les annonces et alertes.
+                  {t.notificationDescription}
                 </p>
               </div>
             </div>
 
             <button
-              onClick={() => setNotifications(!notifications)}
+              onClick={() =>
+                setNotifications(!notifications)
+              }
               className={`h-8 w-16 rounded-full transition ${
                 notifications
                   ? "bg-cyan-500"
@@ -159,11 +206,11 @@ export default function SettingsPage() {
 
             <div>
               <h2 className="font-bold text-white">
-                Wallet
+                {t.wallet}
               </h2>
 
               <p className="text-sm text-zinc-400">
-                Les paramètres avancés du wallet seront ajoutés ici.
+                {t.walletDescription}
               </p>
             </div>
           </div>
@@ -176,11 +223,11 @@ export default function SettingsPage() {
 
             <div>
               <h2 className="font-bold text-white">
-                Sécurité
+                {t.security}
               </h2>
 
               <p className="text-sm text-zinc-400">
-                Les protections anti-slippage et validations seront intégrées progressivement.
+                {t.securityDescription}
               </p>
             </div>
           </div>

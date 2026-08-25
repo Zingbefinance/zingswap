@@ -49,6 +49,14 @@
               {
                 "kind": "account",
                 "path": "user"
+              },
+              {
+                "kind": "arg",
+                "path": "tick_lower"
+              },
+              {
+                "kind": "arg",
+                "path": "tick_upper"
               }
             ]
           }
@@ -91,6 +99,14 @@
         {
           "name": "amount_b",
           "type": "u64"
+        },
+        {
+          "name": "tick_lower",
+          "type": "i32"
+        },
+        {
+          "name": "tick_upper",
+          "type": "i32"
         }
       ]
     },
@@ -295,6 +311,14 @@
               {
                 "kind": "account",
                 "path": "user"
+              },
+              {
+                "kind": "arg",
+                "path": "tick_lower"
+              },
+              {
+                "kind": "arg",
+                "path": "tick_upper"
               }
             ]
           }
@@ -325,7 +349,16 @@
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "tick_lower",
+          "type": "i32"
+        },
+        {
+          "name": "tick_upper",
+          "type": "i32"
+        }
+      ]
     },
     {
       "name": "swap",
@@ -440,63 +473,43 @@
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidPositionPool",
-      "msg": "La position n'appartient pas à ce pool."
+      "name": "InvalidAmount",
+      "msg": "Le montant du swap doit être supérieur à zéro."
     },
     {
       "code": 6001,
-      "name": "InvalidPositionOwner",
-      "msg": "La position n'appartient pas à cet utilisateur."
+      "name": "InvalidInputMint",
+      "msg": "Le mint du token d'entrée est invalide."
     },
     {
       "code": 6002,
-      "name": "InvalidLiquidity",
-      "msg": "La liquidité de la position est invalide."
+      "name": "InvalidOutputMint",
+      "msg": "Le mint du token de sortie est invalide."
     },
     {
       "code": 6003,
-      "name": "InvalidAmount",
-      "msg": "Le montant de liquidité est invalide."
+      "name": "InsufficientLiquidity",
+      "msg": "La liquidité du pool est insuffisante."
     },
     {
       "code": 6004,
-      "name": "InvalidTokenA",
-      "msg": "Le token A fourni est invalide."
+      "name": "InvalidFee",
+      "msg": "Les frais du pool sont invalides."
     },
     {
       "code": 6005,
-      "name": "InvalidTokenB",
-      "msg": "Le token B fourni est invalide."
+      "name": "MathOverflow",
+      "msg": "Dépassement arithmétique."
     },
     {
       "code": 6006,
-      "name": "InvalidTokenOwner",
-      "msg": "Le propriétaire du compte token est invalide."
+      "name": "AmountTooSmall",
+      "msg": "Le montant est trop petit."
     },
     {
       "code": 6007,
-      "name": "InvalidVaultA",
-      "msg": "Le vault A est invalide."
-    },
-    {
-      "code": 6008,
-      "name": "InvalidVaultB",
-      "msg": "Le vault B est invalide."
-    },
-    {
-      "code": 6009,
-      "name": "InsufficientReserveA",
-      "msg": "La réserve A est insuffisante."
-    },
-    {
-      "code": 6010,
-      "name": "InsufficientReserveB",
-      "msg": "La réserve B est insuffisante."
-    },
-    {
-      "code": 6011,
-      "name": "MathOverflow",
-      "msg": "Dépassement arithmétique."
+      "name": "SlippageExceeded",
+      "msg": "Le montant minimum demandé n'est pas respecté."
     }
   ],
   "types": [
@@ -560,6 +573,14 @@
           {
             "name": "owner",
             "type": "pubkey"
+          },
+          {
+            "name": "tick_lower",
+            "type": "i32"
+          },
+          {
+            "name": "tick_upper",
+            "type": "i32"
           },
           {
             "name": "liquidity",

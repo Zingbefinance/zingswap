@@ -1,5 +1,6 @@
 "use client";
 
+import { useLanguage } from "@/components/providers/LanguageContext";
 import { Search, Wallet } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -7,22 +8,38 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 export default function Topbar() {
   const { connected, publicKey, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
+  const { language } = useLanguage();
+
+  const labels = {
+    Français: {
+      dashboard: "Tableau de bord",
+      connectWallet: "Connecter le wallet",
+      search: "Rechercher un token...",
+    },
+    English: {
+      dashboard: "Dashboard",
+      connectWallet: "Connect Wallet",
+      search: "Search token...",
+    },
+  };
+
+  const t = labels[language];
 
   const handleWallet = async () => {
-  if (!connected) {
-    setVisible(true);
-    return;
-  }
+    if (!connected) {
+      setVisible(true);
+      return;
+    }
 
-  await disconnect();
-};
+    await disconnect();
+  };
 
   return (
     <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:px-6 md:py-4">
       {/* Ligne du haut */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">
-          Dashboard
+          {t.dashboard}
         </h1>
 
         <button
@@ -36,7 +53,7 @@ export default function Topbar() {
               ? `${publicKey?.toBase58().slice(0, 4)}...${publicKey
                   ?.toBase58()
                   .slice(-4)}`
-              : "Connect Wallet"}
+              : t.connectWallet}
           </span>
         </button>
       </div>
@@ -50,7 +67,7 @@ export default function Topbar() {
           />
 
           <input
-            placeholder="Search token..."
+            placeholder={t.search}
             className="w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
           />
         </div>

@@ -24,7 +24,10 @@ import {
   calculatePoolPrices,
   type PoolData,
 } from "../lib/pool";
-
+import {
+  getUserPositions,
+  type PositionData,
+} from "../lib/positions";
 export default function LiquidityCard() {
   const { connection } = useConnection();
 
@@ -49,12 +52,23 @@ export default function LiquidityCard() {
 
   const [poolError, setPoolError] =
     useState<string | null>(null);
+const [userPosition, setUserPosition] =
+  useState<PositionData | null>(null);
 
+const [positionLoading, setPositionLoading] =
+  useState(false);
+
+const [positionError, setPositionError] =
+  useState<string | null>(null);
   const [ztcAmount, setZtcAmount] =
     useState("100");
+    const [solAmount, setSolAmount] =
+  useState("0.0005");
 
-  const [solAmount, setSolAmount] =
-    useState("0.0005");
+  
+
+const [tickUpper, setTickUpper] =
+  useState(100);
 const [localError, setLocalError] =
   useState("");
   const poolPrices = poolData
@@ -90,12 +104,53 @@ const [localError, setLocalError] =
   }
 
   useEffect(() => {
-    loadPool();
-  }, [connection]);
+  loadPool();
+}, [connection]);
 
-  // ==================================================
-  // AJOUT DE LIQUIDITÉ
-  // ==================================================
+// ==================================================
+// CHARGEMENT DE LA POSITION UTILISATEUR
+// ==================================================
+
+async function loadUserPosition() {
+  if (!publicKey || !poolData) {
+    setUserPosition(null);
+    return;
+  }
+
+  try {
+    setPositionLoading(true);
+    setPositionError(null);
+
+    const positions = await getUserPositions(
+      connection,
+      publicKey,
+      poolData.address
+    );
+
+    setUserPosition(positions[0] ?? null);
+  } catch (error) {
+    console.error(
+      "Erreur chargement position :",
+      error
+    );
+
+    setPositionError(
+      error instanceof Error
+        ? error.message
+        : "Impossible de charger la position."
+    );
+  } finally {
+    setPositionLoading(false);
+  }
+}
+
+useEffect(() => {
+  loadUserPosition();
+}, [connection, publicKey, poolData?.address]);
+
+// ==================================================
+// AJOUT DE LIQUIDITÉ
+// ==================================================
 
   async function handleAddLiquidity() {
 setLocalError("");
@@ -194,14 +249,34 @@ setLocalError("");
           "Le montant SOL doit être supérieur à zéro."
         );
       }
+      const currentTick = poolData?.currentTick ?? 0;
+const tickSpacing = 8;
 
-      await addLiquidity(
-        pool,
-        userTokenA,
-        userTokenB,
-        amountA,
-        amountB
-      );
+const tickLower =
+  Math.floor(
+    (currentTick - 100) / tickSpacing
+  ) * tickSpacing;
+
+const tickUpper =
+  Math.ceil(
+    (currentTick + 100) / tickSpacing
+  ) * tickSpacing;
+
+if (tickLower >= tickUpper) {
+  throw new Error(
+    "La borne inférieure du tick doit être strictement inférieure à la borne supérieure."
+  );
+}
+
+     await addLiquidity(
+  pool,
+  userTokenA,
+  userTokenB,
+  amountA,
+  amountB,
+  tickLower,
+  tickUpper
+);
 
       await loadPool();
     } catch (error) {
@@ -306,17 +381,41 @@ setLocalError("");
       // Retrait complet de la position
       // ------------------------------------------------
 
-      await removeLiquidity(
-        pool,
-        userTokenA,
-        userTokenB
-      );
+      if (!userPosition) {
+  throw new Error(
+    "Aucune position ZTC / WSOL trouvée pour ce wallet."
+  );
+}
+
+console.log(
+  "Position :",
+  userPosition.address.toBase58()
+);
+
+console.log(
+  "Tick lower :",
+  userPosition.tickLower
+);
+
+console.log(
+  "Tick upper :",
+  userPosition.tickUpper
+);
+
+await removeLiquidity(
+  pool,
+  userTokenA,
+  userTokenB,
+  userPosition.tickLower,
+  userPosition.tickUpper
+);
 
       // ------------------------------------------------
       // Actualisation des réserves
       // ------------------------------------------------
 
       await loadPool();
+      await loadUserPosition();
     } catch (error) {
   console.error(
     "Erreur retrait liquidité :",
@@ -524,13 +623,123 @@ setLocalError("");
           prices={poolPrices}
         />
       )}
+      {/* ==============================================
+    POSITION CLMM
+============================================== */}
+
+<div className="rounded-2xl border bg-white p-4 md:p-6 text-zinc-900 shadow-lg dark:bg-zinc-900 dark:text-white">
+
+  <h2 className="mb-5 text-xl md:text-2xl font-bold">
+    Ma position CLMM
+  </h2>
+
+  {positionLoading && (
+    <p className="text-sm text-zinc-500">
+      Chargement de la position...
+    </p>
+  )}
+
+  {positionError && (
+    <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+      {positionError}
+    </div>
+  )}
+
+  {!positionLoading &&
+    !positionError &&
+    !userPosition && (
+      <p className="text-sm text-zinc-500">
+        Aucune position ZTC / WSOL trouvée.
+      </p>
+    )}
+
+  {userPosition && (
+    <div className="space-y-3">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs text-zinc-500">
+            Tick inférieur
+          </p>
+
+          <p className="mt-1 font-semibold">
+            {userPosition.tickLower}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs text-zinc-500">
+            Tick supérieur
+          </p>
+
+          <p className="mt-1 font-semibold">
+            {userPosition.tickUpper}
+          </p>
+        </div>
+
+      </div>
+
+      <div className="rounded-xl border p-3">
+        <p className="text-xs text-zinc-500">
+          Liquidité de la position
+        </p>
+
+        <p className="mt-1 break-all font-mono text-sm">
+          {userPosition.liquidity.toString()}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs text-zinc-500">
+            ZTC déposé
+          </p>
+
+          <p className="mt-1 font-semibold">
+            {formatTokenAmount(
+              userPosition.amountADeposited
+            )}{" "}
+            ZTC
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs text-zinc-500">
+            WSOL déposé
+          </p>
+
+          <p className="mt-1 font-semibold">
+            {formatTokenAmount(
+              userPosition.amountBDeposited
+            )}{" "}
+            WSOL
+          </p>
+        </div>
+
+      </div>
+
+      <div className="rounded-xl border p-3">
+        <p className="text-xs text-zinc-500">
+          Position PDA
+        </p>
+
+        <p className="mt-1 break-all font-mono text-xs">
+          {userPosition.address.toBase58()}
+        </p>
+      </div>
+
+    </div>
+  )}
+
+</div>
 
       {/* ==============================================
           AJOUT DE LIQUIDITÉ
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
-
+      <div className="rounded-2xl border bg-white p-4 md:p-6 text-zinc-900 shadow-lg dark:bg-zinc-900 dark:text-white">
         <h2 className="mb-5 text-center text-2xl font-bold">
           Ajouter de la liquidité
         </h2>
@@ -549,7 +758,7 @@ setLocalError("");
             onChange={(e) =>
               setZtcAmount(e.target.value)
             }
-            className="w-full rounded-lg border p-3"
+            className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-black outline-none focus:border-black focus:ring-2 focus:ring-zinc-300"
           />
 
         </div>
@@ -568,7 +777,7 @@ setLocalError("");
             onChange={(e) =>
               setSolAmount(e.target.value)
             }
-            className="w-full rounded-lg border p-3"
+            className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-black outline-none focus:border-black focus:ring-2 focus:ring-zinc-300"
           />
 
         </div>
@@ -595,8 +804,7 @@ setLocalError("");
       {/* ==============================================
           RETRAIT DE LIQUIDITÉ
       ============================================== */}
-
-      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
+      <div className="rounded-2xl border bg-white p-4 md:p-6 text-zinc-900 shadow-lg dark:bg-zinc-900 dark:text-white">
 
         <h2 className="mb-2 text-center text-2xl font-bold">
           Retirer la liquidité

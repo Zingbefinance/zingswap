@@ -5,7 +5,6 @@ import {
 import {
   Connection,
   PublicKey,
-  SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 
@@ -19,9 +18,14 @@ import {
 export interface RemoveLiquidityParams {
   connection: Connection;
   wallet: Wallet;
+
   pool: PublicKey;
+
   userTokenA: PublicKey;
   userTokenB: PublicKey;
+
+  tickLower: number;
+  tickUpper: number;
 }
 
 export interface RemoveLiquidityResult {
@@ -40,6 +44,8 @@ export async function buildRemoveLiquidityTransaction(
     pool,
     userTokenA,
     userTokenB,
+    tickLower,
+    tickUpper,
   } = params;
 
   if (!wallet.publicKey) {
@@ -57,20 +63,24 @@ export async function buildRemoveLiquidityTransaction(
   // PDA des vaults
   // --------------------------------------------------
 
-  const { vaultA, vaultB } = getVaultPdas(
-    ZINGSWAP_PROGRAM_ID,
-    pool
-  );
+  const { vaultA, vaultB } =
+    getVaultPdas(
+      ZINGSWAP_PROGRAM_ID,
+      pool
+    );
 
   // --------------------------------------------------
   // PDA de la position utilisateur
   // --------------------------------------------------
 
-  const position = getPositionPda(
-    ZINGSWAP_PROGRAM_ID,
-    pool,
-    wallet.publicKey
-  );
+  const position =
+    getPositionPda(
+      ZINGSWAP_PROGRAM_ID,
+      pool,
+      wallet.publicKey,
+      tickLower,
+      tickUpper
+    );
 
   console.log(
     "REMOVE LIQUIDITY ACCOUNTS:",
@@ -82,6 +92,8 @@ export async function buildRemoveLiquidityTransaction(
       vaultA: vaultA.toBase58(),
       vaultB: vaultB.toBase58(),
       user: wallet.publicKey.toBase58(),
+      tickLower,
+      tickUpper,
     }
   );
 
@@ -91,7 +103,10 @@ export async function buildRemoveLiquidityTransaction(
 
   const transaction =
     await program.methods
-      .removeLiquidity()
+      .removeLiquidity(
+        tickLower,
+        tickUpper
+      )
       .accountsPartial({
         pool,
         position,

@@ -37,6 +37,7 @@ interface SwapParams {
   fromMint: PublicKey;
   toMint: PublicKey;
   minAmountOut?: string;
+  minAmountOutRaw?: string;
 }
 
 interface SwapResult {
@@ -314,12 +315,14 @@ BigInt(10_000);
   );
 
   const swap = useCallback(
-    async ({
-      amount,
-      fromMint,
-      toMint,
-      minAmountOut = "0",
-    }: SwapParams): Promise<SwapResult> => {
+  async ({
+    
+    amount,
+    fromMint,
+    toMint,
+    minAmountOut = "0",
+    minAmountOutRaw,
+  }: SwapParams): Promise<SwapResult> => {
       if (
         !connected ||
         !publicKey ||
@@ -362,11 +365,13 @@ BigInt(10_000);
         fromDecimals
       );
 
-      const minAmountOutRaw = toRawAmount(
-        minAmountOut,
-        toDecimals,
-        true
-      );
+      const minAmountOutRawValue = minAmountOutRaw
+  ? BigInt(minAmountOutRaw)
+  : toRawAmount(
+      minAmountOut,
+      toDecimals,
+      true
+    );
 
       const poolPda = getPoolPda(
         ZINGSWAP_PROGRAM_ID,
@@ -500,9 +505,9 @@ BigInt(10_000);
               amountInRaw.toString()
             ),
             aToB,
-            new BN(
-              minAmountOutRaw.toString()
-            )
+      new BN(
+  minAmountOutRawValue.toString()
+)
           )
           .accountsPartial({
             pool: poolPda,

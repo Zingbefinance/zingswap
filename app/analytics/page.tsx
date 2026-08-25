@@ -1,5 +1,5 @@
 "use client";
-
+import { searchFirstSolanaPair } from "@/lib/dexScreener";
 import MainLayout from "@/components/layout/MainLayout";
 import { BarChart3, Search, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -21,31 +21,21 @@ export default function ChartPage() {
   const [pair, setPair] = useState<Pair | null>(null);
 
   const searchToken = async (value: string) => {
-    if (!value.trim()) return;
+  if (!value.trim()) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const res = await fetch(
-        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(
-          value
-        )}`
-      );
+  try {
+    const solanaPair = await searchFirstSolanaPair(value);
 
-      const data = await res.json();
-
-      const solanaPair = data.pairs?.find(
-        (p: any) => p.chainId === "solana"
-      );
-
-      setPair(solanaPair || null);
-    } catch (err) {
-      console.error(err);
-      setPair(null);
-    }
-
+    setPair(solanaPair);
+  } catch (err) {
+    console.error(err);
+    setPair(null);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   useEffect(() => {
     searchToken("ZTC");

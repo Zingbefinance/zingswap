@@ -28,6 +28,8 @@ export interface AddLiquidityParams {
 
   amountA: BN;
   amountB: BN;
+  tickLower: number;
+tickUpper: number;
 }
 
 export interface AddLiquidityResult {
@@ -48,6 +50,8 @@ export async function buildAddLiquidityTransaction(
     userTokenB,
     amountA,
     amountB,
+    tickLower,
+tickUpper,
   } = params;
 
   if (!wallet.publicKey) {
@@ -61,7 +65,11 @@ export async function buildAddLiquidityTransaction(
       "Le montant du token A doit être supérieur à zéro."
     );
   }
-
+if (tickLower >= tickUpper) {
+  throw new Error(
+    "La borne inférieure du tick doit être strictement inférieure à la borne supérieure."
+  );
+}
   if (amountB.lte(new BN(0))) {
     throw new Error(
       "Le montant du token B doit être supérieur à zéro."
@@ -80,18 +88,22 @@ export async function buildAddLiquidityTransaction(
     );
 
   const position =
-    getPositionPda(
-      ZINGSWAP_PROGRAM_ID,
-      pool,
-      wallet.publicKey
-    );
+  getPositionPda(
+    ZINGSWAP_PROGRAM_ID,
+    pool,
+    wallet.publicKey,
+    tickLower,
+    tickUpper
+  );
 
   const transaction =
     await program.methods
       .addLiquidity(
-        amountA,
-        amountB
-      )
+  amountA,
+  amountB,
+  tickLower,
+  tickUpper
+)
       .accountsPartial({
   pool,
   position,
