@@ -248,20 +248,20 @@ useEffect(() => {
 
   return (
     <div>
-    <h2 className="text-xl md:text-2xl font-bold text-white">  
+    <h2 className="text-lg md:text-xl font-bold text-white">  
         Swap
       </h2>
 
-      <div className="mt-6 md:mt-8 space-y-4 md:space-y-5">
+      <div className="mt-4 space-y-3">
 
         {/* FROM */}
-        <div className="rounded-xl bg-zinc-900 p-4 md:p-5">
+        <div className="rounded-xl bg-zinc-900 p-3 md:p-4">
 
           <p className="text-zinc-400">
             From
           </p>
 
-          <div className="mt-4">
+          <div className="mt-2">
 
             <TokenButton
               token={fromToken}
@@ -269,7 +269,7 @@ useEffect(() => {
             />
 
             {selecting === "from" && (
-              <div className="mt-3">
+              <div className="mt-2">
                 <TokenSelector
                   tokens={TOKENS}
                   onSelect={(token) => {
@@ -295,7 +295,7 @@ setToToken(fromToken);
 
           </div>
 
-          <div className="mt-4 flex justify-between">
+          <div className="mt-2 flex justify-between">
 
             <input
               type="number"
@@ -312,7 +312,7 @@ setToToken(fromToken);
   w-full
   bg-transparent
   text-right
-  text-xl md:text-2xl
+  text-lg md:text-xl
   text-white
   outline-none
   disabled:opacity-50
@@ -321,9 +321,23 @@ setToToken(fromToken);
 
           </div>
 
-          <p className="mt-3 text-sm text-zinc-500">
-  Balance : {fromBalance} {fromToken.symbol}
-</p>
+         <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+  <span>
+    Balance : {fromBalance} {fromToken.symbol}
+  </span>
+
+  <button
+    type="button"
+    onClick={() => {
+      setFromAmount(fromBalance);
+      setMessage("");
+    }}
+    disabled={loading || !connected || Number(fromBalance) <= 0}
+    className="font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+  >
+    MAX
+  </button>
+</div> 
 
         </div>
 
@@ -344,7 +358,7 @@ setToToken(fromToken);
             className="
   rounded-full
   bg-zinc-800
-  p-2 md:p-3
+  p-1.5 md:p-2
   text-white
   transition
   hover:bg-cyan-500
@@ -359,13 +373,13 @@ setToToken(fromToken);
         </div>
 
         {/* TO */}
-        <div className="rounded-xl bg-zinc-900 p-4 md:p-5">
+        <div className="rounded-xl bg-zinc-900 p-3 md:p-4">
 
           <p className="text-zinc-400">
             To
           </p>
 
-          <div className="mt-4">
+          <div className="mt-2">
 
             <TokenButton
               token={toToken}
@@ -373,7 +387,7 @@ setToToken(fromToken);
             />
 
             {selecting === "to" && (
-              <div className="mt-3">
+              <div className="mt-2">
                 <TokenSelector
                   tokens={TOKENS}
                   onSelect={(token) => {
@@ -399,7 +413,7 @@ setFromToken(toToken);
 
           </div>
 
-          <div className="mt-4 flex justify-between">
+          <div className="mt-2 flex justify-between">
 
             <input
   type="text"
@@ -413,7 +427,7 @@ setFromToken(toToken);
   w-full
   bg-transparent
   text-right
-  text-xl md:text-2xl
+  text-lg md:text-xl
   text-zinc-500
   outline-none
 "
@@ -421,14 +435,14 @@ setFromToken(toToken);
 
           </div>
 
-          <p className="mt-3 text-sm text-zinc-500">
+          <p className="mt-2 text-xs text-zinc-500">
   Balance : {toBalance} {toToken.symbol}
 </p>
 
         </div>
 
         {/* DETAILS */}
-        <div className="space-y-2 rounded-xl bg-zinc-900 p-4 text-sm">
+        <div className="space-y-1.5 rounded-xl bg-zinc-900 p-3 text-xs">
 
           <div className="flex justify-between text-zinc-400">
             <span>Slippage</span>
@@ -453,11 +467,12 @@ setFromToken(toToken);
         </div>
 
         {/* MESSAGE */}
-        {message && (
-          <div className="break-all rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
-            {message}
-          </div>
-        )}
+        {/* MESSAGE */}
+{message && (
+  <div className="break-all rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-300">
+    {message}
+  </div>
+)}
 
         {/* ACTION */}
         <button
@@ -468,7 +483,7 @@ setFromToken(toToken);
             w-full
             rounded-xl
             bg-cyan-500
-            py-4
+            py-3
             font-bold
             text-black
             transition
