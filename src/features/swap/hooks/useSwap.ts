@@ -31,6 +31,9 @@ import {
   ZTC_MINT,
   WSOL_MINT,
 } from "../../../lib/anchor/zingswap";
+const ZINGSWAP_TREASURY = new PublicKey(
+  "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq"
+);
 
 interface SwapParams {
   amount: string;
@@ -386,6 +389,9 @@ BigInt(10_000);
         ZINGSWAP_PROGRAM_ID,
         poolPda
       );
+      const ZINGSWAP_TREASURY = new PublicKey(
+  "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq"
+);
 
       const userInput =
         getAssociatedTokenAddressSync(
@@ -395,6 +401,7 @@ BigInt(10_000);
           SPL_TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         );
+        
 
       const userOutput =
         getAssociatedTokenAddressSync(
@@ -404,6 +411,16 @@ BigInt(10_000);
           SPL_TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         );
+        const treasuryInput =
+  getAssociatedTokenAddressSync(
+    fromMint,
+    ZINGSWAP_TREASURY,
+    false,
+    SPL_TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+      
 
       const transaction =
         new Transaction();
@@ -417,6 +434,30 @@ BigInt(10_000);
         await connection.getAccountInfo(
           userOutput
         );
+        const treasuryInputInfo =
+  await connection.getAccountInfo(
+    treasuryInput
+  );
+
+  /*
+ * Création du compte token de trésorerie
+ * s'il n'existe pas encore.
+ *
+ * La trésorerie reste propriétaire de l'ATA.
+ * Le wallet utilisateur paie uniquement la création.
+ */
+if (!treasuryInputInfo) {
+  transaction.add(
+    createAssociatedTokenAccountIdempotentInstruction(
+      publicKey,
+      treasuryInput,
+      ZINGSWAP_TREASURY,
+      fromMint,
+      SPL_TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    )
+  );
+}
 
       /*
        * Création du compte token d'entrée
@@ -434,6 +475,7 @@ BigInt(10_000);
           )
         );
       }
+      
 
       /*
        * Création du compte token de sortie
@@ -499,27 +541,28 @@ BigInt(10_000);
         isZtcToWsol;
 
       const swapInstruction =
-        await program.methods
-          .swap(
-            new BN(
-              amountInRaw.toString()
-            ),
-            aToB,
+  await program.methods
+    .swap(
       new BN(
-  minAmountOutRawValue.toString()
-)
-          )
-          .accountsPartial({
-            pool: poolPda,
-            userInput,
-            userOutput,
-            vaultA,
-            vaultB,
-            user: publicKey,
-            tokenProgram:
-              SPL_TOKEN_PROGRAM_ID,
-          })
-          .instruction();
+        amountInRaw.toString()
+      ),
+      aToB,
+      new BN(
+        minAmountOutRawValue.toString()
+      )
+    )
+    .accounts({
+      pool: poolPda,
+      userInput,
+      userOutput,
+      treasuryInput,
+      vaultA,
+      vaultB,
+      user: publicKey,
+      tokenProgram:
+        SPL_TOKEN_PROGRAM_ID,
+    })
+    .instruction();
 
       transaction.add(
         swapInstruction
@@ -543,9 +586,7 @@ transaction.recentBlockhash =
 transaction.feePayer =
   publicKey;
 
-console.log(
-  "=== TRANSACTION AVANT SIMULATION ==="
-);
+
 
 console.log(
   "Blockhash :",
@@ -599,9 +640,20 @@ if (simulation.value.err) {
   );
 }
 
+
+transaction.feePayer =
+  publicKey;
+
 console.log(
-  "=== TRANSACTION ENVOYÉE À PHANTOM ==="
+  "=== BLOCKHASH FINAL POUR PHANTOM ==="
 );
+
+console.log(
+  "Blockhash :",
+  transaction.recentBlockhash
+);
+
+
 
 console.log(
   "Blockhash :",
@@ -621,22 +673,7 @@ console.log(
 /*
  * Diagnostic juste avant Phantom.
  */
-console.log("=== AVANT SIGNATURE PHANTOM ===");
 
-console.log(
-  "Fee payer :",
-  transaction.feePayer?.toBase58()
-);
-
-console.log(
-  "Recent blockhash :",
-  transaction.recentBlockhash
-);
-
-console.log(
-  "Instructions :",
-  transaction.instructions.length
-);
 
 console.log(
   "Signers requis :",
@@ -658,11 +695,65 @@ console.log(
 /*
  * Signature Phantom.
  */
+/*
+ * Après la simulation, on récupère un blockhash
+ * frais juste avant la signature Phantom.
+ *
+ * La simulation peut prendre quelques instants.
+ * On évite ainsi de signer avec un blockhash
+ * devenu trop ancien.
+ */
+const signingBlockhash =
+  await connection.getLatestBlockhash(
+    "confirmed"
+  );
+transaction.recentBlockhash =
+  signingBlockhash.blockhash;
+
+transaction.feePayer =
+  publicKey;
+
+
+
+console.log(
+  "Blockhash :",
+  transaction.recentBlockhash
+);
+transaction.recentBlockhash =
+  signingBlockhash.blockhash;
+
+transaction.feePayer =
+  publicKey;
+
+
+
+console.log(
+  "Blockhash :",
+  transaction.recentBlockhash
+);
 const signedTransaction =
   await signTransaction(
     transaction
   );
-console.log("=== DIAGNOSTIC PHANTOM ===");
+  
+
+console.log(
+  "Blockhash transaction :",
+  transaction.recentBlockhash
+);
+
+console.log(
+  "Blockhash signé :",
+  signedTransaction.recentBlockhash
+);
+
+console.log(
+  "Signature présente :",
+  signedTransaction.signatures.some(
+    (s) => s.signature !== null
+  )
+);
+
 
 console.log(
   "Fee payer :",
@@ -716,10 +807,10 @@ console.log(
       await connection.confirmTransaction(
         {
           signature,
-          blockhash:
-            latestBlockhash.blockhash,
-          lastValidBlockHeight:
-            latestBlockhash.lastValidBlockHeight,
+        blockhash:
+  signingBlockhash.blockhash,
+lastValidBlockHeight:
+  signingBlockhash.lastValidBlockHeight,
         },
         "confirmed"
       );

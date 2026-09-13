@@ -10,7 +10,7 @@ export const TOKENS: Token[] = [
   {
     symbol: "ZTC",
     name: "Zing Token",
-    mint: "6p2PU4mW3oTnZnc3ZiY4vbRgzfHJNhRpLJNx9PxV7MuW",
+    mint: "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu",
     decimals: 9,
   },
 ];

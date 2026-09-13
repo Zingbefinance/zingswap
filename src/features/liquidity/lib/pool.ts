@@ -6,8 +6,7 @@ import {
 
 import {
   ZINGSWAP_PROGRAM_ID,
-  ZTC_MINT,
-  WSOL_MINT,
+
   getPoolPda,
   getVaultPdas,
 } from "../../../lib/anchor/zingswap";
@@ -39,21 +38,23 @@ function readU128LE(
 }
 
 export async function getPoolData(
-  connection: Connection
+  connection: Connection,
+  tokenAMint: PublicKey,
+  tokenBMint: PublicKey
 ): Promise<PoolData> {
   const poolAddress = getPoolPda(
     ZINGSWAP_PROGRAM_ID,
-    ZTC_MINT,
-    WSOL_MINT
+    tokenAMint,
+    tokenBMint
   );
 
   const poolInfo =
     await connection.getAccountInfo(poolAddress);
 
   if (!poolInfo) {
-    throw new Error(
-      "Pool ZTC/WSOL introuvable."
-    );
+  throw new Error(
+  `Pool ${tokenAMint.toBase58()} / ${tokenBMint.toBase58()} introuvable.`
+);
   }
 
   const data = poolInfo.data;
@@ -70,13 +71,13 @@ export async function getPoolData(
     data.subarray(8, 40)
   );
 
-  const tokenAMint = new PublicKey(
-    data.subarray(40, 72)
-  );
+  const poolTokenAMint = new PublicKey(
+  data.subarray(40, 72)
+);
 
-  const tokenBMint = new PublicKey(
-    data.subarray(72, 104)
-  );
+const poolTokenBMint = new PublicKey(
+  data.subarray(72, 104)
+);
 
   const vaultA = new PublicKey(
     data.subarray(104, 136)
@@ -122,8 +123,9 @@ export async function getPoolData(
   return {
     address: poolAddress,
     authority,
-    tokenAMint,
-    tokenBMint,
+    tokenAMint: poolTokenAMint,
+tokenBMint: poolTokenBMint,
+    
     vaultA,
     vaultB,
     feeBps,
@@ -152,16 +154,16 @@ export function calculatePoolPrices(
     );
   }
 
-  const ztcPerWsol =
+  const tokenAPerTokenB =
     Number(pool.reserveA) /
     Number(pool.reserveB);
 
-  const wsolPerZtc =
+  const tokenBPerTokenA =
     Number(pool.reserveB) /
     Number(pool.reserveA);
 
   return {
-    ztcPerWsol,
-    wsolPerZtc,
-  }; 
+  ztcPerWsol: tokenAPerTokenB,
+  wsolPerZtc: tokenBPerTokenA,
+};
 }

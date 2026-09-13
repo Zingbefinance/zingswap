@@ -84,7 +84,11 @@ const [localError, setLocalError] =
       setPoolLoading(true);
       setPoolError(null);
 
-      const data = await getPoolData(connection);
+      const data = await getPoolData(
+  connection,
+  ZTC_MINT,
+  WSOL_MINT
+);
 
       setPoolData(data);
     } catch (error) {
@@ -455,24 +459,28 @@ await removeLiquidity(
           INFORMATIONS DU POOL
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-lg dark:bg-zinc-900">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:p-5 text-white shadow-lg">
 
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
 
-          <h2 className="text-xl md:text-2xl font-bold">
-            Pool ZTC / WSOL
-          </h2>
+  <div>
+    <h2 className="text-lg font-bold">
+      ZTC / WSOL
+    </h2>
+
+    <p className="mt-1 text-xs text-zinc-500">
+      Liquidity Pool
+    </p>
+  </div>
 
           <button
-            type="button"
-            onClick={loadPool}
-            disabled={poolLoading}
-            className="rounded-lg border px-3 py-1 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            {poolLoading
-              ? "..."
-              : "Actualiser"}
-          </button>
+  type="button"
+  onClick={loadPool}
+  disabled={poolLoading}
+  className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+>
+  {poolLoading ? "..." : "Actualiser"}
+</button>
 
         </div>
 
@@ -488,110 +496,103 @@ await removeLiquidity(
             {poolPrices && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                <div className="rounded-xl border p-3">
+                <div className="rounded-xl bg-zinc-900 p-3">
+  <p className="text-xs text-zinc-500">
+    ZTC Price
+  </p>
 
-                  <p className="text-xs text-zinc-500">
-                    Prix ZTC
-                  </p>
+  <p className="mt-1 text-sm font-semibold text-white">
+    1 ZTC ={" "}
+    {poolPrices.wsolPerZtc.toFixed(9)}{" "}
+    WSOL
+  </p>
+</div>
+<div className="rounded-xl bg-zinc-900 p-3">
+  <p className="text-xs text-zinc-500">
+    WSOL Price
+  </p>
 
-                  <p className="mt-1 font-semibold">
-                    1 ZTC ={" "}
-                    {poolPrices.wsolPerZtc.toFixed(
-                      9
-                    )}{" "}
-                    WSOL
-                  </p>
+  <p className="mt-1 text-sm font-semibold text-white">
+    1 WSOL ={" "}
+    {poolPrices.ztcPerWsol.toFixed(6)}{" "}
+    ZTC
+  </p>
+</div>
 
-                </div>
-
-                <div className="rounded-xl border p-3">
-
-                  <p className="text-xs text-zinc-500">
-                    Prix WSOL
-                  </p>
-
-                  <p className="mt-1 font-semibold">
-                    1 WSOL ={" "}
-                    {poolPrices.ztcPerWsol.toFixed(
-                      6
-                    )}{" "}
-                    ZTC
-                  </p>
-
-                </div>
+  
 
               </div>
             )}
 
-            <div className="rounded-xl bg-zinc-100 p-4 dark:bg-zinc-800">
+            <div className="rounded-xl bg-zinc-900 p-3">
 
-              <p className="text-xs text-zinc-500">
-                Réserve ZTC
-              </p>
+  <p className="text-xs text-zinc-500">
+    ZTC Reserve
+  </p>
 
-              <p className="mt-1 text-xl font-semibold">
-                {formatTokenAmount(
-                  poolData.reserveA
-                )}{" "}
-                ZTC
-              </p>
+  <p className="mt-1 text-sm font-semibold text-white">
+    {formatTokenAmount(
+      poolData.reserveA
+    )}{" "}
+    ZTC
+  </p>
 
-            </div>
+</div>
 
-            <div className="rounded-xl bg-zinc-100 p-4 dark:bg-zinc-800">
+            <div className="rounded-xl bg-zinc-900 p-3">
 
-              <p className="text-xs text-zinc-500">
-                Réserve WSOL
-              </p>
+  <p className="text-xs text-zinc-500">
+    WSOL Reserve
+  </p>
 
-              <p className="mt-1 text-xl font-semibold">
-                {formatTokenAmount(
-                  poolData.reserveB
-                )}{" "}
-                WSOL
-              </p>
+  <p className="mt-1 text-sm font-semibold text-white">
+    {formatTokenAmount(
+      poolData.reserveB
+    )}{" "}
+    WSOL
+  </p>
 
-            </div>
+</div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
 
-              <div className="rounded-xl border p-3">
+  <div className="rounded-xl bg-zinc-900 p-3">
 
-                <p className="text-xs text-zinc-500">
-                  Frais
-                </p>
+    <p className="text-xs text-zinc-500">
+      Fee
+    </p>
 
-                <p className="font-semibold">
-                  {poolData.feeBps / 100}%
-                </p>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {poolData.feeBps / 100}%
+    </p>
 
-              </div>
+  </div>
 
-              <div className="rounded-xl border p-3">
+  <div className="rounded-xl bg-zinc-900 p-3">
 
-                <p className="text-xs text-zinc-500">
-                  Tick
-                </p>
+    <p className="text-xs text-zinc-500">
+      Current Tick
+    </p>
 
-                <p className="font-semibold">
-                  {poolData.currentTick}
-                </p>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {poolData.currentTick}
+    </p>
 
-              </div>
+  </div>
 
-            </div>
+</div>
 
-            <div className="rounded-xl border p-3">
+            <div className="rounded-xl bg-zinc-900 p-3">
 
-              <p className="text-xs text-zinc-500">
-                Liquidité CLMM
-              </p>
+  <p className="text-xs text-zinc-500">
+    Pool Liquidity
+  </p>
 
-              <p className="mt-1 break-all font-mono text-sm">
-                {poolData.liquidity.toString()}
-              </p>
+  <p className="mt-1 break-all font-mono text-sm text-white">
+    {poolData.liquidity.toString()}
+  </p>
 
-            </div>
+</div>
 
             <div className="rounded-xl border p-3">
 
@@ -627,11 +628,23 @@ await removeLiquidity(
     POSITION CLMM
 ============================================== */}
 
-<div className="rounded-2xl border bg-white p-4 md:p-6 text-zinc-900 shadow-lg dark:bg-zinc-900 dark:text-white">
+<div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:p-5 text-white shadow-lg">
 
-  <h2 className="mb-5 text-xl md:text-2xl font-bold">
-    Ma position CLMM
-  </h2>
+  <div className="mb-4 flex items-center justify-between">
+    <div>
+      <h2 className="text-lg font-bold">
+        Your Position
+      </h2>
+
+      <p className="mt-1 text-xs text-zinc-500">
+        ZTC / WSOL
+      </p>
+    </div>
+
+    <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
+      CLMM
+    </span>
+  </div>
 
   {positionLoading && (
     <p className="text-sm text-zinc-500">
@@ -656,79 +669,79 @@ await removeLiquidity(
   {userPosition && (
     <div className="space-y-3">
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3">
 
-        <div className="rounded-xl border p-3">
-          <p className="text-xs text-zinc-500">
-            Tick inférieur
-          </p>
+  <div className="rounded-xl bg-zinc-900 p-3">
+    <p className="text-xs text-zinc-500">
+      Lower Tick
+    </p>
 
-          <p className="mt-1 font-semibold">
-            {userPosition.tickLower}
-          </p>
-        </div>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {userPosition.tickLower}
+    </p>
+  </div>
 
-        <div className="rounded-xl border p-3">
-          <p className="text-xs text-zinc-500">
-            Tick supérieur
-          </p>
+  <div className="rounded-xl bg-zinc-900 p-3">
+    <p className="text-xs text-zinc-500">
+      Upper Tick
+    </p>
 
-          <p className="mt-1 font-semibold">
-            {userPosition.tickUpper}
-          </p>
-        </div>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {userPosition.tickUpper}
+    </p>
+  </div>
 
-      </div>
+</div>
 
-      <div className="rounded-xl border p-3">
-        <p className="text-xs text-zinc-500">
-          Liquidité de la position
-        </p>
+      <div className="rounded-xl bg-zinc-900 p-3">
+  <p className="text-xs text-zinc-500">
+    Position Liquidity
+  </p>
 
-        <p className="mt-1 break-all font-mono text-sm">
-          {userPosition.liquidity.toString()}
-        </p>
-      </div>
+  <p className="mt-1 break-all font-mono text-sm text-white">
+    {userPosition.liquidity.toString()}
+  </p>
+</div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+     <div className="grid grid-cols-2 gap-3">
 
-        <div className="rounded-xl border p-3">
-          <p className="text-xs text-zinc-500">
-            ZTC déposé
-          </p>
+  <div className="rounded-xl bg-zinc-900 p-3">
+    <p className="text-xs text-zinc-500">
+      ZTC Deposited
+    </p>
 
-          <p className="mt-1 font-semibold">
-            {formatTokenAmount(
-              userPosition.amountADeposited
-            )}{" "}
-            ZTC
-          </p>
-        </div>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {formatTokenAmount(
+        userPosition.amountADeposited
+      )}{" "}
+      ZTC
+    </p>
+  </div>
 
-        <div className="rounded-xl border p-3">
-          <p className="text-xs text-zinc-500">
-            WSOL déposé
-          </p>
+  <div className="rounded-xl bg-zinc-900 p-3">
+    <p className="text-xs text-zinc-500">
+      WSOL Deposited
+    </p>
 
-          <p className="mt-1 font-semibold">
-            {formatTokenAmount(
-              userPosition.amountBDeposited
-            )}{" "}
-            WSOL
-          </p>
-        </div>
+    <p className="mt-1 text-sm font-semibold text-white">
+      {formatTokenAmount(
+        userPosition.amountBDeposited
+      )}{" "}
+      WSOL
+    </p>
+  </div>
 
-      </div>
+</div> 
 
-      <div className="rounded-xl border p-3">
-        <p className="text-xs text-zinc-500">
-          Position PDA
-        </p>
+      <div className="rounded-xl bg-zinc-900 p-3">
+  <p className="text-xs text-zinc-500">
+    Position PDA
+  </p>
 
-        <p className="mt-1 break-all font-mono text-xs">
-          {userPosition.address.toBase58()}
-        </p>
-      </div>
+  <p className="mt-1 break-all font-mono text-xs text-zinc-400">
+    {userPosition.address.toBase58()}
+  </p>
+</div>
 
     </div>
   )}
@@ -739,54 +752,60 @@ await removeLiquidity(
           AJOUT DE LIQUIDITÉ
       ============================================== */}
 
-      <div className="rounded-2xl border bg-white p-4 md:p-6 text-zinc-900 shadow-lg dark:bg-zinc-900 dark:text-white">
-        <h2 className="mb-5 text-center text-2xl font-bold">
-          Ajouter de la liquidité
-        </h2>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:p-5 text-white shadow-lg">
+  <div className="mb-4">
+    <h2 className="text-lg font-bold">
+      Add Liquidity
+    </h2>
+
+    <p className="mt-1 text-xs text-zinc-500">
+      Provide ZTC and WSOL to earn trading fees.
+    </p>
+  </div>
+
+        <div className="mb-3">
+
+  <label className="mb-1.5 block text-xs font-medium text-zinc-400">
+    ZTC
+  </label>
+
+  <input
+    type="number"
+    min="0"
+    step="0.000000001"
+    value={ztcAmount}
+    onChange={(e) =>
+      setZtcAmount(e.target.value)
+    }
+    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm text-white outline-none transition focus:border-zinc-600"
+  />
+
+</div>
 
         <div className="mb-4">
 
-          <label className="mb-1 block text-sm">
-            ZTC
-          </label>
+  <label className="mb-1.5 block text-xs font-medium text-zinc-400">
+    WSOL
+  </label>
 
-          <input
-            type="number"
-            min="0"
-            step="0.000000001"
-            value={ztcAmount}
-            onChange={(e) =>
-              setZtcAmount(e.target.value)
-            }
-            className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-black outline-none focus:border-black focus:ring-2 focus:ring-zinc-300"
-          />
+  <input
+    type="number"
+    min="0"
+    step="0.000000001"
+    value={solAmount}
+    onChange={(e) =>
+      setSolAmount(e.target.value)
+    }
+    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm text-white outline-none transition focus:border-zinc-600"
+  />
 
-        </div>
-
-        <div className="mb-5">
-
-          <label className="mb-1 block text-sm">
-            SOL
-          </label>
-
-          <input
-            type="number"
-            min="0"
-            step="0.000000001"
-            value={solAmount}
-            onChange={(e) =>
-              setSolAmount(e.target.value)
-            }
-            className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-black outline-none focus:border-black focus:ring-2 focus:ring-zinc-300"
-          />
-
-        </div>
+</div>
 
         <button
           type="button"
           onClick={handleAddLiquidity}
           disabled={loading}
-          className="w-full rounded-lg bg-black py-3 text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-xl bg-white py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading
             ? "Préparation..."
@@ -819,7 +838,7 @@ await removeLiquidity(
           type="button"
           onClick={handleRemoveLiquidity}
           disabled={loading}
-          className="w-full rounded-lg bg-black py-3 text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading
             ? "Retrait en cours..."

@@ -20,7 +20,7 @@ export const ZINGSWAP_PROGRAM_ID = new PublicKey(
 );
 
 export const ZTC_MINT = new PublicKey(
-  "6p2PU4mW3oTnZnc3ZiY4vbRgzfHJNhRpLJNx9PxV7MuW"
+  "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu"
 );
 
 export const WSOL_MINT = new PublicKey(

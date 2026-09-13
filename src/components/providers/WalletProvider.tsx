@@ -1,4 +1,5 @@
 "use client";
+
 import { LanguageProvider } from "./LanguageContext";
 import { TokenProvider } from "./TokenContext";
 import { ReactNode, useMemo } from "react";
@@ -21,7 +22,7 @@ interface Props {
 export default function WalletProvider({ children }: Props) {
   const endpoint =
     process.env.NEXT_PUBLIC_ZINGSWAP_RPC ||
-    "https://api.devnet.solana.com";
+    "https://api.mainnet-beta.solana.com";
 
   const wallets = useMemo(
     () => [
@@ -32,16 +33,16 @@ export default function WalletProvider({ children }: Props) {
   );
 
   return (
-   <ConnectionProvider endpoint={endpoint}>
-  <SolanaWalletProvider wallets={wallets} autoConnect>
-   <WalletModalProvider>
-  <LanguageProvider>
-    <TokenProvider>
-      {children}
-    </TokenProvider>
-  </LanguageProvider>
-</WalletModalProvider> 
-  </SolanaWalletProvider>
-</ConnectionProvider> 
+    <ConnectionProvider endpoint={endpoint}>
+      <SolanaWalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <LanguageProvider>
+            <TokenProvider>
+              {children}
+            </TokenProvider>
+          </LanguageProvider>
+        </WalletModalProvider>
+      </SolanaWalletProvider>
+    </ConnectionProvider>
   );
 }

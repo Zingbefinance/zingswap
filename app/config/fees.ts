@@ -3,7 +3,8 @@
 
 export const PLATFORM_FEE_BPS = 30; // 0,30 %
 
-export const HOLDER_SHARE_BPS = 10; // 0,10 %
-export const TREASURY_SHARE_BPS = 20; // 0,20 %
+export const HOLDER_SHARE_BPS = 0;
+export const TREASURY_SHARE_BPS = 30; // 0,30 %
 
-export const TREASURY_WALLET = "A_REMPLIR_PLUS_TARD";
+export const TREASURY_WALLET =
+  "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq";

@@ -1,4 +1,5 @@
 "use client";
+
 import { useLanguage } from "@/components/providers/LanguageContext";
 import MainLayout from "@/components/layout/MainLayout";
 import {
@@ -48,23 +49,18 @@ const translations = {
 
 export default function SettingsPage() {
   const [slippage, setSlippage] = useState("0.5%");
-  const [network, setNetwork] = useState("Mainnet");
-  
   const [notifications, setNotifications] = useState(true);
+
   const { language, setLanguage } = useLanguage();
   const t = translations[language];
 
   return (
     <MainLayout>
       <div className="space-y-6">
-
         {/* En-tête */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
           <div className="flex items-center gap-3">
-            <Settings
-              className="text-cyan-400"
-              size={28}
-            />
+            <Settings className="text-cyan-400" size={28} />
 
             <div>
               <h1 className="text-3xl font-bold text-white">
@@ -92,6 +88,7 @@ export default function SettingsPage() {
             {["0.1%", "0.5%", "1%", "3%"].map((value) => (
               <button
                 key={value}
+                type="button"
                 onClick={() => setSlippage(value)}
                 className={`rounded-xl px-4 py-2 font-medium transition ${
                   slippage === value
@@ -116,19 +113,12 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex gap-2">
-            {["Mainnet", "Devnet"].map((value) => (
-              <button
-                key={value}
-                onClick={() => setNetwork(value)}
-                className={`rounded-xl px-4 py-2 font-medium transition ${
-                  network === value
-                    ? "bg-cyan-500 text-black"
-                    : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
+            <button
+              type="button"
+              className="rounded-xl bg-cyan-500 px-4 py-2 font-medium text-black"
+            >
+              Mainnet
+            </button>
           </div>
         </div>
 
@@ -147,6 +137,7 @@ export default function SettingsPage() {
               (value) => (
                 <button
                   key={value}
+                  type="button"
                   onClick={() => setLanguage(value)}
                   className={`rounded-xl px-4 py-2 font-medium transition ${
                     language === value
@@ -179,6 +170,7 @@ export default function SettingsPage() {
             </div>
 
             <button
+              type="button"
               onClick={() =>
                 setNotifications(!notifications)
               }
@@ -232,7 +224,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-
       </div>
     </MainLayout>
   );

@@ -15,15 +15,15 @@ export default function LiquidityPage() {
             EN-TÊTE
         ============================================== */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h1 className="text-3xl font-bold text-white">
-            Liquidity
-          </h1>
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 md:p-6">
+  <h1 className="text-2xl font-bold text-white">
+    Liquidity
+  </h1>
 
-          <p className="mt-2 text-zinc-400">
-            Gère tes positions de liquidité ZingSwap.
-          </p>
-        </div>
+  <p className="mt-1 text-sm text-zinc-400">
+    Provide liquidity to ZingSwap pools and earn trading fees.
+  </p>
+</div>
 
         {/* ==============================================
             STATISTIQUES
