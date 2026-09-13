@@ -8,6 +8,6 @@ export const TOKENS = {
   ZING: {
     symbol: "ZING",
     mint: "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu",
-    decimals: 9,
+    decimals: 6,
   },
 };

@@ -21,8 +21,9 @@ interface Props {
 
 export default function WalletProvider({ children }: Props) {
   const endpoint =
-    process.env.NEXT_PUBLIC_ZINGSWAP_RPC ||
-    "https://api.mainnet-beta.solana.com";
+  process.env.NEXT_PUBLIC_HELIUS_RPC ||
+  process.env.NEXT_PUBLIC_ZINGSWAP_RPC ||
+  "https://api.mainnet-beta.solana.com";
 
   const wallets = useMemo(
     () => [
