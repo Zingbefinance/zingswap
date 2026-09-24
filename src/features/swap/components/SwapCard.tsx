@@ -252,11 +252,9 @@ useEffect(() => {
         Swap
       </h2>
 
-      <div className="mt-4 space-y-3">
-
+      <div className="mt-3 space-y-2">
         {/* FROM */}
-        <div className="rounded-xl bg-zinc-900 p-3 md:p-4">
-
+        <div className="rounded-xl bg-zinc-900 p-3">
           <p className="text-zinc-400">
             From
           </p>
@@ -342,8 +340,7 @@ setToToken(fromToken);
         </div>
 
         {/* SWITCH */}
-        <div className="flex justify-center">
-
+        <div className="-my-1 flex justify-center relative z-10">
           <button
             type="button"
             disabled={loading}
@@ -373,8 +370,7 @@ setToToken(fromToken);
         </div>
 
         {/* TO */}
-        <div className="rounded-xl bg-zinc-900 p-3 md:p-4">
-
+        <div className="rounded-xl bg-zinc-900 p-3">
           <p className="text-zinc-400">
             To
           </p>
