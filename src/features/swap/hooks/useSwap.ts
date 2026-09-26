@@ -159,10 +159,12 @@ export function useSwap() {
         );
       }
 
-      const amountInRaw = toRawAmount(
-        amount,
-        9
-      );
+      const inputDecimals = isZtcToWsol ? 6 : 9;
+
+const amountInRaw = toRawAmount(
+  amount,
+  inputDecimals
+);
 
       const poolPda = getPoolPda(
         ZINGSWAP_PROGRAM_ID,
@@ -291,28 +293,31 @@ BigInt(10_000);
       }
 
       const amountOutRaw =
-        numerator / denominator;
+  numerator / denominator;
 
-      if (amountOutRaw <= BigInt(0)) {
-        throw new Error(
-          "Le montant de sortie est trop petit."
-        );
-      }
+const outputDecimals = isZtcToWsol ? 9 : 6;
+const outputBase = 10 ** outputDecimals;
 
-      return {
-        amountIn: amount,
-        amountOut: (
-          Number(amountOutRaw) /
-          1_000_000_000
-        ).toFixed(6),
-        amountInRaw:
-          amountInRaw.toString(),
-        amountOutRaw:
-          amountOutRaw.toString(),
-        feeRaw:
-          fee.toString(),
-        feeBps,
-      };
+if (amountOutRaw <= BigInt(0)) {
+  throw new Error(
+    "Le montant de sortie est trop petit."
+  );
+}
+
+return {
+  amountIn: amount,
+  amountOut: (
+    Number(amountOutRaw) /
+    outputBase
+  ).toFixed(6),
+  amountInRaw:
+    amountInRaw.toString(),
+  amountOutRaw:
+    amountOutRaw.toString(),
+  feeRaw:
+    fee.toString(),
+  feeBps,
+};
     },
     [connection]
   );
@@ -360,8 +365,8 @@ BigInt(10_000);
         );
       }
 
-      const fromDecimals = 9;
-      const toDecimals = 9;
+      const fromDecimals = isZtcToWsol ? 6 : 9;
+const toDecimals = isZtcToWsol ? 9 : 6;
 
       const amountInRaw = toRawAmount(
         amount,
