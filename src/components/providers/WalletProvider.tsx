@@ -2,6 +2,7 @@
 
 import { LanguageProvider } from "./LanguageContext";
 import { TokenProvider } from "./TokenContext";
+import { SettingsProvider } from "./SettingsContext";
 import { ReactNode, useMemo } from "react";
 import {
   ConnectionProvider,
@@ -38,9 +39,9 @@ export default function WalletProvider({ children }: Props) {
       <SolanaWalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <LanguageProvider>
-            <TokenProvider>
-              {children}
-            </TokenProvider>
+            <SettingsProvider>
+              <TokenProvider>{children}</TokenProvider>
+            </SettingsProvider>
           </LanguageProvider>
         </WalletModalProvider>
       </SolanaWalletProvider>

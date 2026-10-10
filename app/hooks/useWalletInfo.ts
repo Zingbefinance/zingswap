@@ -1,137 +1,104 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-type WalletToken = {
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+
+export type PortfolioAsset = {
   mint: string;
   symbol: string;
+  name: string;
   amount: number;
   decimals: number;
 };
-const connection = new Connection(
-  "https://api.mainnet-beta.solana.com",
-  "confirmed"
-);
 
-// Mint du ZING TOKEN
-const ZING_MINT = new PublicKey(
-  
-  "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu"
-);
-const TOKEN_REGISTRY: Record<
-  string,
-  { symbol: string; name: string }
-> = {
-  [ZING_MINT.toBase58()]: {
-    symbol: "ZTC",
-    name: "Zing Token",
-  },
+type AssetPrice = { usd: number; change24h: number | null };
+type PortfolioState =
+  | { status: "idle" | "loading" }
+  | { status: "error"; error: string }
+  | { status: "ready"; assets: PortfolioAsset[]; prices: Record<string, AssetPrice>; pricesUnavailable: boolean; updatedAt: number };
 
-  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263PB263": {
-    symbol: "BONK",
-    name: "Bonk",
-  },
-
-  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": {
-    symbol: "JUP",
-    name: "Jupiter",
-  },
-
-  "EKpQGSJtjMFqKZ6uJ3iM3Y6L6i9n9M2J7sKnzGWxZMF": {
-    symbol: "WIF",
-    name: "dogwifhat",
-  },
-
-  "Es9vMFrzaCERmJfrF4H2t6wQBaLtgBoQxGc1dQc5sK7": {
-    symbol: "USDT",
-    name: "Tether",
-  },
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const TOKEN_REGISTRY: Record<string, { symbol: string; name: string }> = {
+  "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu": { symbol: "ZTC", name: "Zing Token" },
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263PB263": { symbol: "BONK", name: "Bonk" },
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: { symbol: "JUP", name: "Jupiter" },
+  EKpQGSJtjMFqKZ6uJ3iM3Y6L6i9n9M2J7sKnzGWxZMF: { symbol: "WIF", name: "dogwifhat" },
+  Es9vMFrzaCERmJfrF4H2t6wQBaLtgBoQxGc1dQc5sK7: { symbol: "USDT", name: "Tether" },
 };
+
 export default function useWalletInfo() {
-  const { publicKey, connected } = useWallet();
-useEffect(() => {
-  console.log("Wallet connecté :", publicKey?.toBase58());
-}, [publicKey]);
-const [address, setAddress] = useState("");
-const [solBalance, setSolBalance] = useState(0);
-const [zingBalance, setZingBalance] = useState(0);
-const [tokens, setTokens] = useState<WalletToken[]>([]);
+  const { connection } = useConnection();
+  const { publicKey, connected } = useWallet();
+  const [state, setState] = useState<PortfolioState>({ status: "idle" });
+  const requestId = useRef(0);
 
-  useEffect(() => {
-    async function loadWallet() {
-      if (!connected || !publicKey) {
-        setAddress("");
-        setSolBalance(0);
-        setZingBalance(0);
-        return;
-      }
+  const refresh = useCallback(async () => {
+    if (!connected || !publicKey) return;
+    const currentRequest = ++requestId.current;
+    setState({ status: "loading" });
 
-      try {
-        // Adresse
-        setAddress(publicKey.toBase58());
+    try {
+      const [lamports, legacyAccounts, token2022Accounts] = await Promise.all([
+        connection.getBalance(publicKey, "confirmed"),
+        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }, "confirmed"),
+        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_2022_PROGRAM_ID }, "confirmed"),
+      ]);
+      if (requestId.current !== currentRequest) return;
 
-        // SOL
-console.log("Lecture du wallet :", publicKey.toBase58());
-        const lamports = await connection.getBalance(publicKey);
-        setSolBalance(lamports / LAMPORTS_PER_SOL);
+      const assets: PortfolioAsset[] = [{
+        mint: SOL_MINT,
+        symbol: "SOL",
+        name: "Solana",
+        amount: lamports / LAMPORTS_PER_SOL,
+        decimals: 9,
+      }];
 
-        // Recherche de tous les comptes SPL du wallet
-        const tokenAccounts =
-          await connection.getParsedTokenAccountsByOwner(
-            publicKey,
-            {
-              programId: TOKEN_PROGRAM_ID,
-            }
-          );
-console.log("Wallet :", publicKey.toBase58());
-console.log("Token accounts :", tokenAccounts.value);
+      for (const account of [...legacyAccounts.value, ...token2022Accounts.value]) {
+        const info = account.account.data.parsed.info;
+        const tokenAmount = info.tokenAmount;
+        const amount = Number(tokenAmount.uiAmountString ?? tokenAmount.uiAmount ?? 0);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        const metadata = TOKEN_REGISTRY[info.mint];
+        assets.push({
+          mint: info.mint,
+          symbol: metadata?.symbol ?? "SPL",
+          name: metadata?.name ?? "Token SPL",
+          amount,
+          decimals: tokenAmount.decimals,
+        });
+      }
 
-let balance = 0;
+      let prices: Record<string, AssetPrice> = {};
+      let pricesUnavailable = false;
+      try {
+        const response = await fetch(`/api/tokens/prices?mints=${assets.map((asset) => asset.mint).join(",")}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Price lookup failed");
+        const payload = (await response.json()) as { prices?: Record<string, AssetPrice> };
+        prices = payload.prices ?? {};
+      } catch {
+        pricesUnavailable = true;
+      }
 
-const walletTokens: WalletToken[] = [];
+      if (requestId.current === currentRequest) {
+        setState({ status: "ready", assets, prices, pricesUnavailable, updatedAt: Date.now() });
+      }
+    } catch (error) {
+      if (requestId.current === currentRequest) {
+        setState({ status: "error", error: error instanceof Error ? error.message : "Impossible de lire les soldes du portefeuille." });
+      }
+    }
+  }, [connected, connection, publicKey]);
 
-tokenAccounts.value.forEach((account) => {
-  const info: any = account.account.data.parsed.info;
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      requestId.current += 1;
+      setState({ status: "idle" });
+      return;
+    }
+    void refresh();
+  }, [connected, publicKey, refresh]);
 
-  const amount =
-    Number(info.tokenAmount.amount) /
-    Math.pow(10, info.tokenAmount.decimals);
-
-  if (amount <= 0) return;
-
-  const registry =
-  TOKEN_REGISTRY[info.mint];
-
-walletTokens.push({
-  mint: info.mint,
-  symbol: registry?.symbol || "TOKEN",
-  amount,
-  decimals: info.tokenAmount.decimals,
-});
-
-  if (info.mint === ZING_MINT.toBase58()) {
-    balance = amount;
-  }
-});
-
-setTokens(walletTokens);
-setZingBalance(balance);
-
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    loadWallet();
-  }, [connected, publicKey]);
-
-return {
-  connected,
-  address,
-  solBalance,
-  zingBalance,
-  tokens,
-};
+  return { connected, address: publicKey?.toBase58() ?? "", state, refresh };
 }

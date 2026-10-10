@@ -6,6 +6,8 @@ import {
 
 import {
   ZINGSWAP_PROGRAM_ID,
+  ZTC_MINT,
+  WSOL_MINT,
 
   getPoolPda,
   getVaultPdas,
@@ -75,9 +77,16 @@ export async function getPoolData(
   data.subarray(40, 72)
 );
 
-const poolTokenBMint = new PublicKey(
+  const poolTokenBMint = new PublicKey(
   data.subarray(72, 104)
 );
+
+  if (
+    !poolTokenAMint.equals(tokenAMint) ||
+    !poolTokenBMint.equals(tokenBMint)
+  ) {
+    throw new Error("Les mints enregistrés dans le pool ne correspondent pas à ZTC / WSOL.");
+  }
 
   const vaultA = new PublicKey(
     data.subarray(104, 136)
@@ -137,33 +146,47 @@ tokenBMint: poolTokenBMint,
     reserveB: BigInt(vaultBInfo.value.amount),
   };
   }
- export interface PoolPrices {
+export interface PoolPrices {
   ztcPerWsol: number;
   wsolPerZtc: number;
 }
 
 export function calculatePoolPrices(
   pool: PoolData
-): PoolPrices {
+): PoolPrices | null {
+  // This frontend requests the pool in ZTC (A) / WSOL (B) order. Do not
+  // label a differently ordered pool as though its reserves had that order.
   if (
+    !pool.tokenAMint.equals(ZTC_MINT) ||
+    !pool.tokenBMint.equals(WSOL_MINT) ||
     pool.reserveA <= BigInt(0) ||
     pool.reserveB <= BigInt(0)
   ) {
-    throw new Error(
-      "Impossible de calculer le prix : réserves insuffisantes."
-    );
+    return null;
   }
 
-  const tokenAPerTokenB =
-    Number(pool.reserveA) /
-    Number(pool.reserveB);
+  const ztcReserve = Number(pool.reserveA) / 10 ** 6;
+  const wsolReserve = Number(pool.reserveB) / 10 ** 9;
 
-  const tokenBPerTokenA =
-    Number(pool.reserveB) /
-    Number(pool.reserveA);
+  if (!Number.isFinite(ztcReserve) || !Number.isFinite(wsolReserve)) {
+    return null;
+  }
+
+  // Spot price from the pool's current reserve ratio; this is not a swap quote.
+  const ztcPerWsol = ztcReserve / wsolReserve;
+  const wsolPerZtc = wsolReserve / ztcReserve;
+
+  if (
+    !Number.isFinite(ztcPerWsol) ||
+    !Number.isFinite(wsolPerZtc) ||
+    ztcPerWsol <= 0 ||
+    wsolPerZtc <= 0
+  ) {
+    return null;
+  }
 
   return {
-  ztcPerWsol: tokenAPerTokenB,
-  wsolPerZtc: tokenBPerTokenA,
-};
+    ztcPerWsol,
+    wsolPerZtc,
+  };
 }

@@ -3,35 +3,32 @@
 import type { PoolPrices } from "../lib/pool";
 
 interface PoolPriceChartProps {
-  prices: PoolPrices;
+  prices: PoolPrices | null;
 }
 
 export default function PoolPriceChart({
   prices,
 }: PoolPriceChartProps) {
-  const price = prices.ztcPerWsol;
-
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
       <div className="mb-5">
         <h2 className="text-xl font-bold">
-          Prix ZTC / WSOL
+          Prix spot du pool ZTC / WSOL
         </h2>
 
         <p className="mt-1 text-sm text-zinc-500">
-          Prix actuel calculé à partir des réserves
-          du pool.
+          Calculé à partir du ratio des réserves actuelles. Ce prix spot n’est pas une estimation de swap ni un montant garanti reçu.
         </p>
       </div>
 
-      <div className="flex h-64 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+      {prices ? <><div className="flex h-64 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
         <div className="text-center">
           <p className="text-sm text-zinc-500">
             1 WSOL
           </p>
 
           <p className="mt-2 text-4xl font-bold">
-            {price.toFixed(6)}
+            {prices.ztcPerWsol.toFixed(6)}
           </p>
 
           <p className="mt-2 text-sm text-zinc-500">
@@ -43,7 +40,7 @@ export default function PoolPriceChart({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl border p-3">
           <p className="text-xs text-zinc-500">
-            ZTC → WSOL
+            Prix spot · 1 ZTC = WSOL
           </p>
 
           <p className="mt-1 font-semibold">
@@ -53,14 +50,16 @@ export default function PoolPriceChart({
 
         <div className="rounded-xl border p-3">
           <p className="text-xs text-zinc-500">
-            WSOL → ZTC
+            Prix spot · 1 WSOL = ZTC
           </p>
 
           <p className="mt-1 font-semibold">
             {prices.ztcPerWsol.toFixed(6)}
           </p>
         </div>
-      </div>
+      </div></> : <div className="flex h-64 items-center justify-center rounded-xl bg-zinc-100 text-center text-sm text-zinc-500 dark:bg-zinc-800">
+        Prix spot indisponible : réserves nulles, absentes ou mints inattendus.
+      </div>}
     </div>
   );
 }

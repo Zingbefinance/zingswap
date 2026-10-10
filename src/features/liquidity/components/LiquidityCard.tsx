@@ -5,6 +5,7 @@ import PoolPriceChart from "./PoolPriceChart";
 import { useEffect, useState } from "react";
 import { BN } from "@coral-xyz/anchor";
 import {
+  getAccount,
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -28,6 +29,38 @@ import {
   getUserPositions,
   type PositionData,
 } from "../lib/positions";
+
+const ZTC_DECIMALS = 6;
+const WSOL_DECIMALS = 9;
+
+function parseTokenAmount(value: string, decimals: number, tokenName: string): bigint {
+  const normalized = value.trim();
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) {
+    throw new Error(`Saisis un montant ${tokenName} valide, supérieur à zéro.`);
+  }
+
+  const [whole = "0", fraction = ""] = normalized.split(".");
+  if (fraction.length > decimals) {
+    throw new Error(`${tokenName} accepte au maximum ${decimals} décimales.`);
+  }
+
+  const rawAmount =
+    BigInt(whole || "0") * BigInt(10) ** BigInt(decimals) +
+    BigInt(fraction.padEnd(decimals, "0") || "0");
+  if (rawAmount <= BigInt(0)) {
+    throw new Error(`Le montant ${tokenName} doit être supérieur à zéro.`);
+  }
+
+  return rawAmount;
+}
+
+function formatTokenBalance(amount: bigint, decimals: number): string {
+  const scale = BigInt(10) ** BigInt(decimals);
+  const whole = amount / scale;
+  const fraction = (amount % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
 export default function LiquidityCard() {
   const { connection } = useConnection();
 
@@ -186,26 +219,24 @@ setLocalError("");
           TOKEN_PROGRAM_ID
         );
 
-      const tokenAInfo =
-        await connection.getAccountInfo(
-          userTokenA
-        );
-
-      if (!tokenAInfo) {
-        throw new Error(
-          `Le compte ZTC du wallet n'existe pas encore.\n\nATA ZTC : ${userTokenA.toBase58()}`
-        );
+      let tokenAAccount;
+      try {
+        tokenAAccount = await getAccount(connection, userTokenA, "confirmed", TOKEN_PROGRAM_ID);
+      } catch {
+        throw new Error("Le compte token ZTC est introuvable ou illisible. Crée-le et approvisionne-le avant de continuer.");
+      }
+      if (!tokenAAccount.mint.equals(ZTC_MINT) || !tokenAAccount.owner.equals(publicKey)) {
+        throw new Error("Le compte token ZTC ne correspond pas au mint ou au wallet connecté.");
       }
 
-      const tokenBInfo =
-        await connection.getAccountInfo(
-          userTokenB
-        );
-
-      if (!tokenBInfo) {
-        throw new Error(
-          `Le compte WSOL du wallet n'existe pas encore.\n\nATA WSOL : ${userTokenB.toBase58()}`
-        );
+      let tokenBAccount;
+      try {
+        tokenBAccount = await getAccount(connection, userTokenB, "confirmed", TOKEN_PROGRAM_ID);
+      } catch {
+        throw new Error("Le compte token WSOL est introuvable ou illisible. Crée-le et approvisionne-le avant de continuer.");
+      }
+      if (!tokenBAccount.mint.equals(WSOL_MINT) || !tokenBAccount.owner.equals(publicKey)) {
+        throw new Error("Le compte token WSOL ne correspond pas au mint ou au wallet connecté.");
       }
 
       console.log(
@@ -228,31 +259,18 @@ setLocalError("");
         userTokenB.toBase58()
       );
 
-      const amountA = new BN(
-        Math.round(
-          Number(ztcAmount) *
-            1_000_000_000
-        )
-      );
+      const amountARaw = parseTokenAmount(ztcAmount, ZTC_DECIMALS, "ZTC");
+      const amountBRaw = parseTokenAmount(solAmount, WSOL_DECIMALS, "WSOL");
 
-      const amountB = new BN(
-        Math.round(
-          Number(solAmount) *
-            1_000_000_000
-        )
-      );
-
-      if (amountA.lte(new BN(0))) {
-        throw new Error(
-          "Le montant ZTC doit être supérieur à zéro."
-        );
+      if (amountARaw > tokenAAccount.amount) {
+        throw new Error(`Solde ZTC insuffisant : demandé ${formatTokenBalance(amountARaw, ZTC_DECIMALS)} ZTC, disponible ${formatTokenBalance(tokenAAccount.amount, ZTC_DECIMALS)} ZTC.`);
+      }
+      if (amountBRaw > tokenBAccount.amount) {
+        throw new Error(`Solde WSOL insuffisant : demandé ${formatTokenBalance(amountBRaw, WSOL_DECIMALS)} WSOL, disponible ${formatTokenBalance(tokenBAccount.amount, WSOL_DECIMALS)} WSOL.`);
       }
 
-      if (amountB.lte(new BN(0))) {
-        throw new Error(
-          "Le montant SOL doit être supérieur à zéro."
-        );
-      }
+      const amountA = new BN(amountARaw.toString());
+      const amountB = new BN(amountBRaw.toString());
       const currentTick = poolData?.currentTick ?? 0;
 const tickSpacing = 8;
 
@@ -439,12 +457,13 @@ await removeLiquidity(
   // ==================================================
 
   function formatTokenAmount(
-    amount: bigint
+    amount: bigint,
+    decimals: number
   ) {
     return (
-      Number(amount) / 1_000_000_000
+      Number(amount) / 10 ** decimals
     ).toLocaleString("fr-FR", {
-      maximumFractionDigits: 9,
+      maximumFractionDigits: decimals,
     });
   }
 
@@ -532,7 +551,8 @@ await removeLiquidity(
 
   <p className="mt-1 text-sm font-semibold text-white">
     {formatTokenAmount(
-      poolData.reserveA
+      poolData.reserveA,
+      ZTC_DECIMALS
     )}{" "}
     ZTC
   </p>
@@ -547,7 +567,8 @@ await removeLiquidity(
 
   <p className="mt-1 text-sm font-semibold text-white">
     {formatTokenAmount(
-      poolData.reserveB
+      poolData.reserveB,
+      WSOL_DECIMALS
     )}{" "}
     WSOL
   </p>
@@ -712,7 +733,8 @@ await removeLiquidity(
 
     <p className="mt-1 text-sm font-semibold text-white">
       {formatTokenAmount(
-        userPosition.amountADeposited
+        userPosition.amountADeposited,
+        ZTC_DECIMALS
       )}{" "}
       ZTC
     </p>
@@ -725,7 +747,8 @@ await removeLiquidity(
 
     <p className="mt-1 text-sm font-semibold text-white">
       {formatTokenAmount(
-        userPosition.amountBDeposited
+        userPosition.amountBDeposited,
+        WSOL_DECIMALS
       )}{" "}
       WSOL
     </p>
@@ -772,7 +795,7 @@ await removeLiquidity(
   <input
     type="number"
     min="0"
-    step="0.000000001"
+    step="0.000001"
     value={ztcAmount}
     onChange={(e) =>
       setZtcAmount(e.target.value)

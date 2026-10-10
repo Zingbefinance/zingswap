@@ -17,6 +17,7 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import {
   useConnection,
@@ -31,6 +32,9 @@ import {
   ZTC_MINT,
   WSOL_MINT,
 } from "../../../lib/anchor/zingswap";
+
+import { getTokenByMint } from "../../../../lib/tokens/tokenRegistry";
+import { useSettings } from "../../../components/providers/SettingsContext";
 const ZINGSWAP_TREASURY = new PublicKey(
   "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq"
 );
@@ -53,6 +57,50 @@ interface QuoteResult {
   amountOutRaw: string;
   feeRaw: string;
   feeBps: number;
+  minAmountOutRaw: string;
+}
+
+export interface JupiterQuoteResult {
+  amountIn: string;
+  amountOut: string;
+  amountInRaw: string;
+  amountOutRaw: string;
+  router: string | null;
+  route: string[];
+  feeBps: number | null;
+  feeAmountRaw: string | null;
+  feeAmount: string | null;
+  feeMint: string | null;
+  platformFeeBps: number | null;
+  referralFeeBpsRequested: number | null;
+  referralConfirmed: boolean;
+  referralNetBps: number | null;
+  poolFees: null;
+  priceImpact: number | null;
+  signatureFeeLamports: number | null;
+  prioritizationFeeLamports: number | null;
+  rentFeeLamports: number | null;
+}
+
+interface JupiterOrderResult {
+  transaction: string | null;
+  requestId: string | null;
+  inAmount: string | null;
+  outAmount: string | null;
+  router: string | null;
+  lastValidBlockHeight: string | null;
+  expireAt: string | null;
+  errorCode: number | null;
+  errorMessage: string | null;
+}
+
+interface JupiterExecuteResult {
+  status: "Success" | "Failed";
+  signature: string | null;
+  code: number | null;
+  error: string | null;
+  totalInputAmount: string | null;
+  totalOutputAmount: string | null;
 }
 function toRawAmount(
   amount: string,
@@ -94,6 +142,7 @@ function toRawAmount(
 
 export function useSwap() {
   const { connection } = useConnection();
+  const { slippageBps } = useSettings();
 
   const {
     publicKey,
@@ -140,68 +189,82 @@ export function useSwap() {
       amount,
       fromMint,
       toMint,
+      slippageBps,
     }: {
       amount: string;
       fromMint: PublicKey;
       toMint: PublicKey;
+      slippageBps: number;
     }): Promise<QuoteResult> => {
-      const isZtcToWsol =
-        fromMint.equals(ZTC_MINT) &&
-        toMint.equals(WSOL_MINT);
+const [inputToken, outputToken] = await Promise.all([
+  getTokenByMint(fromMint.toBase58()),
+  getTokenByMint(toMint.toBase58()),
+]);
 
-      const isWsolToZtc =
-        fromMint.equals(WSOL_MINT) &&
-        toMint.equals(ZTC_MINT);
+if (!inputToken || !outputToken) {
+  throw new Error(
+    "Impossible de récupérer les informations des tokens."
+  );
+}
 
-      if (!isZtcToWsol && !isWsolToZtc) {
-        throw new Error(
-          "Cette paire n'est pas supportée par le pool ZTC/WSOL."
-        );
-      }
-
-      const inputDecimals = isZtcToWsol ? 6 : 9;
+const inputDecimals = inputToken.decimals;
+const outputDecimals = outputToken.decimals;
 
 const amountInRaw = toRawAmount(
   amount,
   inputDecimals
 );
 
-      const poolPda = getPoolPda(
-        ZINGSWAP_PROGRAM_ID,
-        ZTC_MINT,
-        WSOL_MINT
-      );
+let poolPda = getPoolPda(
+  ZINGSWAP_PROGRAM_ID,
+  fromMint,
+  toMint
+);
 
-      const { vaultA, vaultB } =
-        getVaultPdas(
-          ZINGSWAP_PROGRAM_ID,
-          poolPda
-        );
+let poolAccountInfo =
+  await connection.getAccountInfo(poolPda);
 
-      const inputVault = isZtcToWsol
-        ? vaultA
-        : vaultB;
+let aToB = true;
 
-      const outputVault = isZtcToWsol
-        ? vaultB
-        : vaultA;
+if (!poolAccountInfo) {
+  poolPda = getPoolPda(
+    ZINGSWAP_PROGRAM_ID,
+    toMint,
+    fromMint
+  );
 
-      const inputAccount =
-        await getAccount(
-          connection,
-          inputVault
-        );
+  poolAccountInfo =
+    await connection.getAccountInfo(poolPda);
 
-      const outputAccount =
-        await getAccount(
-          connection,
-          outputVault
-        );
+  aToB = false;
+}
 
-      const poolInfo =
-        await connection.getAccountInfo(
-          poolPda
-        );
+if (!poolAccountInfo) {
+  throw new Error(
+    "Aucun pool ZingSwap trouvé pour cette paire."
+  );
+}
+
+const { vaultA, vaultB } =
+  getVaultPdas(
+    ZINGSWAP_PROGRAM_ID,
+    poolPda
+  );
+
+const inputVault = aToB
+  ? vaultA
+  : vaultB;
+
+const outputVault = aToB
+  ? vaultB
+  : vaultA;
+
+      const [inputAccount, outputAccount] = await Promise.all([
+        getAccount(connection, inputVault),
+        getAccount(connection, outputVault),
+      ]);
+
+      const poolInfo = poolAccountInfo;
 
       if (!poolInfo) {
         throw new Error(
@@ -295,7 +358,7 @@ BigInt(10_000);
       const amountOutRaw =
   numerator / denominator;
 
-const outputDecimals = isZtcToWsol ? 9 : 6;
+
 const outputBase = 10 ** outputDecimals;
 
 if (amountOutRaw <= BigInt(0)) {
@@ -314,12 +377,195 @@ return {
     amountInRaw.toString(),
   amountOutRaw:
     amountOutRaw.toString(),
+  minAmountOutRaw: ((amountOutRaw * BigInt(10_000 - slippageBps)) / BigInt(10_000)).toString(),
   feeRaw:
     fee.toString(),
   feeBps,
 };
     },
     [connection]
+  );
+
+  const getJupiterQuote = useCallback(
+    async ({
+      amount,
+      fromMint,
+      toMint,
+      slippageBps,
+      signal,
+    }: {
+      amount: string;
+      fromMint: PublicKey;
+      toMint: PublicKey;
+      slippageBps: number;
+      signal?: AbortSignal;
+    }): Promise<JupiterQuoteResult> => {
+      const [inputToken, outputToken] = await Promise.all([
+        getTokenByMint(fromMint.toBase58()),
+        getTokenByMint(toMint.toBase58()),
+      ]);
+
+      if (!inputToken || !outputToken) {
+        throw new Error("Métadonnées des tokens indisponibles pour la route externe.");
+      }
+
+      const amountInRaw = toRawAmount(amount, inputToken.decimals).toString();
+      const response = await fetch("/api/jupiter/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputMint: fromMint.toBase58(),
+          outputMint: toMint.toBase58(),
+          amount: amountInRaw,
+          inputDecimals: inputToken.decimals,
+          outputDecimals: outputToken.decimals,
+          slippageBps,
+        }),
+        cache: "no-store",
+        signal,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === "string"
+            ? result.error
+            : "La cotation externe est indisponible."
+        );
+      }
+
+      return result as JupiterQuoteResult;
+    },
+    []
+  );
+
+  const swapOnJupiter = useCallback(
+    async ({
+      amount,
+      fromMint,
+      toMint,
+      slippageBps,
+    }: {
+      amount: string;
+      fromMint: PublicKey;
+      toMint: PublicKey;
+      slippageBps: number;
+    }): Promise<{ signature: string; amountOut: string | null }> => {
+      if (!connected || !publicKey || !signTransaction) {
+        throw new Error("Connecte un portefeuille capable de signer les transactions.");
+      }
+
+      const inputToken = await getTokenByMint(fromMint.toBase58());
+      if (!inputToken) {
+        throw new Error("Métadonnées du token d'entrée indisponibles.");
+      }
+      const amountRaw = toRawAmount(amount, inputToken.decimals).toString();
+
+      const orderResponse = await fetch("/api/jupiter/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputMint: fromMint.toBase58(),
+          outputMint: toMint.toBase58(),
+          amount: amountRaw,
+          taker: publicKey.toBase58(),
+          slippageBps,
+        }),
+        cache: "no-store",
+      });
+      const order = (await orderResponse.json()) as JupiterOrderResult & { error?: string };
+
+      if (!orderResponse.ok) {
+        throw new Error("Impossible de préparer la transaction via la route externe.");
+      }
+      if (order.transaction === "") {
+        throw new Error(
+          `La route externe n'a pas pu construire la transaction (code ${order.errorCode ?? "inconnu"}).`
+        );
+      }
+      if (!order.transaction) {
+        throw new Error("Aucune transaction à signer n'a été retournée.");
+      }
+      if (!order.requestId) {
+        throw new Error("La demande d'exécution de la route externe est incomplète.");
+      }
+
+      const ensureOrderIsFresh = async () => {
+        if (order.expireAt) {
+          const expiresAt = Date.parse(order.expireAt);
+          if (!Number.isFinite(expiresAt)) {
+            throw new Error("La route externe a retourné une expiration de cotation invalide.");
+          }
+          if (expiresAt <= Date.now()) {
+            throw new Error("La cotation externe a expiré. Demande une nouvelle cotation.");
+          }
+        }
+
+        if (order.lastValidBlockHeight) {
+          const lastValidBlockHeight = Number(order.lastValidBlockHeight);
+          if (!Number.isSafeInteger(lastValidBlockHeight)) {
+            throw new Error("La route externe a retourné une limite de bloc invalide.");
+          }
+          const currentBlockHeight = await connection.getBlockHeight("confirmed");
+          if (currentBlockHeight > lastValidBlockHeight) {
+            throw new Error("La transaction a expiré. Demande une nouvelle cotation.");
+          }
+        }
+      };
+
+      await ensureOrderIsFresh();
+
+      let unsignedTransaction: VersionedTransaction;
+      try {
+        unsignedTransaction = VersionedTransaction.deserialize(
+          Buffer.from(order.transaction, "base64")
+        );
+      } catch {
+        throw new Error("La transaction retournée par la route externe est invalide.");
+      }
+
+      const requiredSignerCount =
+        unsignedTransaction.message.header.numRequiredSignatures;
+      const takerSignerIndex = unsignedTransaction.message.staticAccountKeys
+        .slice(0, requiredSignerCount)
+        .findIndex((key) => key.equals(publicKey));
+      if (takerSignerIndex < 0) {
+        throw new Error("La transaction ne demande pas la signature du portefeuille connecté.");
+      }
+
+      // La signature reste dans le portefeuille; seule la transaction signée sera transmise au proxy.
+      const signedTransaction = await signTransaction(unsignedTransaction);
+      if (!signedTransaction.signatures[takerSignerIndex]?.some((byte) => byte !== 0)) {
+        throw new Error("Le portefeuille n'a pas signé la transaction.");
+      }
+      await ensureOrderIsFresh();
+
+      const executeResponse = await fetch("/api/jupiter/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signedTransaction: Buffer.from(signedTransaction.serialize()).toString("base64"),
+          requestId: order.requestId,
+          ...(order.lastValidBlockHeight
+            ? { lastValidBlockHeight: order.lastValidBlockHeight }
+            : {}),
+        }),
+        cache: "no-store",
+      });
+      const result = (await executeResponse.json()) as JupiterExecuteResult & { error?: string };
+
+      if (!executeResponse.ok) {
+        throw new Error("La route externe n'a pas pu exécuter la transaction signée.");
+      }
+      if (result.status !== "Success" || !result.signature) {
+        throw new Error(
+          `La route externe a échoué à exécuter le swap (code ${result.code ?? "inconnu"}).`
+        );
+      }
+
+      return { signature: result.signature, amountOut: result.totalOutputAmount };
+    },
+    [connected, publicKey, signTransaction, connection]
   );
 
   const swap = useCallback(
@@ -348,32 +594,29 @@ return {
         );
       }
 
-      const isZtcToWsol =
-        fromMint.equals(ZTC_MINT) &&
-        toMint.equals(WSOL_MINT);
+      const inputToken = await getTokenByMint(
+  fromMint.toBase58()
+);
 
-      const isWsolToZtc =
-        fromMint.equals(WSOL_MINT) &&
-        toMint.equals(ZTC_MINT);
+const outputToken = await getTokenByMint(
+  toMint.toBase58()
+);
 
-      if (
-        !isZtcToWsol &&
-        !isWsolToZtc
-      ) {
-        throw new Error(
-          "Cette paire n'est pas supportée par le pool ZTC/WSOL."
-        );
-      }
+if (!inputToken || !outputToken) {
+  throw new Error(
+    "Impossible de récupérer les informations des tokens."
+  );
+}
 
-      const fromDecimals = isZtcToWsol ? 6 : 9;
-const toDecimals = isZtcToWsol ? 9 : 6;
+const fromDecimals = inputToken.decimals;
+const toDecimals = outputToken.decimals;
 
-      const amountInRaw = toRawAmount(
-        amount,
-        fromDecimals
-      );
+const amountInRaw = toRawAmount(
+  amount,
+  fromDecimals
+);
 
-      const minAmountOutRawValue = minAmountOutRaw
+const minAmountOutRawValue = minAmountOutRaw
   ? BigInt(minAmountOutRaw)
   : toRawAmount(
       minAmountOut,
@@ -381,19 +624,47 @@ const toDecimals = isZtcToWsol ? 9 : 6;
       true
     );
 
-      const poolPda = getPoolPda(
-        ZINGSWAP_PROGRAM_ID,
-        ZTC_MINT,
-        WSOL_MINT
-      );
+// Recherche du pool dans le sens
+// token d'entrée -> token de sortie.
+let poolPda = getPoolPda(
+  ZINGSWAP_PROGRAM_ID,
+  fromMint,
+  toMint
+);
 
-      const {
-        vaultA,
-        vaultB,
-      } = getVaultPdas(
-        ZINGSWAP_PROGRAM_ID,
-        poolPda
-      );
+let poolAccountInfo =
+  await connection.getAccountInfo(poolPda);
+
+let aToB = true;
+
+// Si le pool n'existe pas dans ce sens,
+// on essaie l'ordre inverse.
+if (!poolAccountInfo) {
+  poolPda = getPoolPda(
+    ZINGSWAP_PROGRAM_ID,
+    toMint,
+    fromMint
+  );
+
+  poolAccountInfo =
+    await connection.getAccountInfo(poolPda);
+
+  aToB = false;
+}
+
+if (!poolAccountInfo) {
+  throw new Error(
+    "Aucun pool ZingSwap trouvé pour cette paire."
+  );
+}
+
+const {
+  vaultA,
+  vaultB,
+} = getVaultPdas(
+  ZINGSWAP_PROGRAM_ID,
+  poolPda
+);
       const ZINGSWAP_TREASURY = new PublicKey(
   "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq"
 );
@@ -507,7 +778,10 @@ if (!treasuryInputInfo) {
        * 3. Le programme ZingSwap utilise ensuite
        *    ce WSOL comme token d'entrée.
        */
-      if (isWsolToZtc) {
+      if (
+  fromMint.equals(WSOL_MINT) &&
+  toMint.equals(ZTC_MINT)
+) {
         const lamports =
           Number(amountInRaw);
 
@@ -542,9 +816,6 @@ if (!treasuryInputInfo) {
        * true  => ZTC -> WSOL
        * false => WSOL -> ZTC
        */
-      const aToB =
-        isZtcToWsol;
-
       const swapInstruction =
   await program.methods
     .swap(
@@ -834,9 +1105,11 @@ lastValidBlockHeight:
     ]
   );
 
-    return {
+  return {
     swap,
     getQuote,
+    getJupiterQuote,
+    swapOnJupiter,
     connected,
     publicKey,
   };

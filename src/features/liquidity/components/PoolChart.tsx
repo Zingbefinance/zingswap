@@ -6,22 +6,18 @@ interface PoolChartProps {
   pool: PoolData;
 }
 
-function formatAmount(amount: bigint): string {
-  return (
-    Number(amount) / 1_000_000_000
-  ).toLocaleString("fr-FR", {
-    maximumFractionDigits: 6,
-  });
+function formatTokenAmount(amount: bigint, decimals: number): number {
+  return Number(amount) / 10 ** decimals;
 }
 
 export default function PoolChart({
   pool,
 }: PoolChartProps) {
   const ztcReserve =
-    Number(pool.reserveA) / 1_000_000_000;
+    formatTokenAmount(pool.reserveA, 6);
 
   const wsolReserve =
-    Number(pool.reserveB) / 1_000_000_000;
+    formatTokenAmount(pool.reserveB, 9);
 
   const maxReserve = Math.max(
     ztcReserve,
@@ -59,7 +55,7 @@ export default function PoolChart({
             </span>
 
             <span className="font-mono">
-              {formatAmount(pool.reserveA)}
+              {ztcReserve.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
             </span>
           </div>
 
@@ -80,7 +76,7 @@ export default function PoolChart({
             </span>
 
             <span className="font-mono">
-              {formatAmount(pool.reserveB)}
+              {wsolReserve.toLocaleString("fr-FR", { maximumFractionDigits: 9 })}
             </span>
           </div>
 
@@ -104,7 +100,7 @@ export default function PoolChart({
           </p>
 
           <p className="mt-1 font-semibold">
-            {formatAmount(pool.reserveA)}
+            {ztcReserve.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
           </p>
         </div>
 
@@ -114,7 +110,7 @@ export default function PoolChart({
           </p>
 
           <p className="mt-1 font-semibold">
-            {formatAmount(pool.reserveB)}
+            {wsolReserve.toLocaleString("fr-FR", { maximumFractionDigits: 9 })}
           </p>
         </div>
 

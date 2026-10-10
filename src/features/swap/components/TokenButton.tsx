@@ -26,7 +26,9 @@ export default function TokenButton({ token, onClick }: Props) {
         cursor-pointer
       "
     >
-      <div className="h-7 w-7 rounded-full bg-cyan-500" />
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black">
+        {token.symbol.slice(0, 1)}
+      </div>
 
       {token.symbol}
 

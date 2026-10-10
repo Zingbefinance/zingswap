@@ -65,9 +65,16 @@ export default function Sidebar() {
   return (
     <aside className="w-64 min-h-screen bg-[#0B0F19] border-r border-gray-800 flex flex-col">
       <div className="p-6 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-violet-500">
-          ZingSwap
-        </h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/images/zingswap-logo.png"
+            alt="ZingSwap"
+            width={1310}
+            height={1200}
+            className="h-10 w-10 shrink-0 object-contain"
+          />
+          <h1 className="text-2xl font-bold text-violet-500">ZingSwap</h1>
+        </div>
 
         <p className="text-xs text-gray-400 mt-1">
           Decentralized Exchange

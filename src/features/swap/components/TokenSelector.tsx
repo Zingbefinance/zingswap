@@ -1,3 +1,5 @@
+"use client";
+
 import { Token } from "@/lib/tokens/types";
 
 interface Props {
@@ -10,69 +12,39 @@ export default function TokenSelector({
   onSelect,
 }: Props) {
   return (
-    <div className="space-y-2 rounded-xl bg-zinc-900 p-4">
+    <div className="space-y-1 rounded-xl bg-zinc-900 p-2">
+      {tokens.map((token) => (
+        <button
+          key={token.mint}
+          type="button"
+          onClick={() => onSelect?.(token)}
+          className="
+            flex
+            w-full
+            items-center
+            gap-3
+            rounded-lg
+            p-3
+            text-left
+            transition
+            hover:bg-zinc-800
+          "
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black">
+            {token.symbol.slice(0, 1)}
+          </div>
 
-      {/* SEARCH */}
+          <div>
+            <p className="font-semibold text-white">
+              {token.symbol}
+            </p>
 
-      <input
-        type="text"
-        placeholder="Search token..."
-        className="
-          w-full
-          rounded-lg
-          bg-zinc-800
-          px-4
-          py-3
-          text-white
-          outline-none
-          placeholder:text-zinc-500
-        "
-      />
-
-      {/* TOKEN LIST */}
-
-      <div className="mt-3 space-y-1">
-
-        {tokens.map((token) => (
-          <button
-            key={token.symbol}
-            type="button"
-            onClick={() => onSelect?.(token)}
-            className="
-              flex
-              w-full
-              items-center
-              justify-between
-              rounded-lg
-              p-3
-              transition
-              hover:bg-zinc-800
-            "
-          >
-
-            <div className="flex items-center gap-3">
-
-              <div className="h-8 w-8 rounded-full bg-cyan-500" />
-
-              <div className="text-left">
-
-                <p className="font-semibold text-white">
-                  {token.symbol}
-                </p>
-
-                <p className="text-sm text-zinc-500">
-                  {token.name}
-                </p>
-
-              </div>
-
-            </div>
-
-          </button>
-        ))}
-
-      </div>
-
+            <p className="text-sm text-zinc-500">
+              {token.name}
+            </p>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

@@ -1,229 +1,80 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { useLanguage } from "@/components/providers/LanguageContext";
+import { useSettings } from "@/components/providers/SettingsContext";
 import MainLayout from "@/components/layout/MainLayout";
-import {
-  Settings,
-  Wallet,
-  Globe,
-  Bell,
-  Gauge,
-  Shield,
-} from "lucide-react";
-import { useState } from "react";
+import { Bell, Gauge, Globe, LockKeyhole, Settings, Wallet } from "lucide-react";
 
-type Language = "Français" | "English";
-
-const translations = {
-  Français: {
-    title: "Paramètres",
-    subtitle: "Configurez votre expérience ZingSwap.",
-    slippage: "Slippage",
-    network: "Réseau",
-    language: "Langue",
-    notifications: "Notifications",
-    notificationDescription: "Recevoir les annonces et alertes.",
-    wallet: "Wallet",
-    walletDescription:
-      "Les paramètres avancés du wallet seront ajoutés ici.",
-    security: "Sécurité",
-    securityDescription:
-      "Les protections anti-slippage et validations seront intégrées progressivement.",
-  },
-  English: {
-    title: "Settings",
-    subtitle: "Configure your ZingSwap experience.",
-    slippage: "Slippage",
-    network: "Network",
-    language: "Language",
-    notifications: "Notifications",
-    notificationDescription: "Receive announcements and alerts.",
-    wallet: "Wallet",
-    walletDescription:
-      "Advanced wallet settings will be added here.",
-    security: "Security",
-    securityDescription:
-      "Anti-slippage protections and validations will be integrated progressively.",
-  },
+const SLIPPAGE_OPTIONS = [10, 50, 100, 300];
+const GENESIS_NETWORKS: Record<string, string> = {
+  "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": "Solana Mainnet Beta",
+  EtWTRABZaYq6iMfeYKouRu166VU2xqa1: "Solana Devnet",
+  "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "Solana Testnet",
 };
 
 export default function SettingsPage() {
-  const [slippage, setSlippage] = useState("0.5%");
-  const [notifications, setNotifications] = useState(true);
-
   const { language, setLanguage } = useLanguage();
-  const t = translations[language];
+  const { slippageBps, setSlippageBps } = useSettings();
+  const { connection } = useConnection();
+  const [network, setNetwork] = useState("");
+  const fr = language === "Français";
+
+  useEffect(() => {
+    let active = true;
+    const rpcHost = (() => {
+      try { return new URL(connection.rpcEndpoint).hostname; } catch { return "RPC configuré"; }
+    })();
+    connection.getGenesisHash().then((genesisHash) => {
+      if (!active) return;
+      const label = GENESIS_NETWORKS[genesisHash] ?? "Réseau Solana personnalisé";
+      setNetwork(`${label} · ${rpcHost}`);
+    }).catch(() => {
+      if (active) setNetwork(`${fr ? "Réseau non vérifié" : "Network could not be verified"} · ${rpcHost}`);
+    });
+    return () => { active = false; };
+  }, [connection, fr]);
+
+  const unavailable = fr ? "Indisponible pour le moment" : "Not available yet";
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* En-tête */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <div className="flex items-center gap-3">
-            <Settings className="text-cyan-400" size={28} />
+        <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+          <div className="flex items-center gap-3"><Settings className="text-cyan-400" size={28} /><div><h1 className="text-3xl font-bold text-white">{fr ? "Paramètres" : "Settings"}</h1><p className="mt-2 text-zinc-400">{fr ? "Préférences utilisées par ZingSwap." : "Preferences used by ZingSwap."}</p></div></div>
+        </header>
 
-            <div>
-              <h1 className="text-3xl font-bold text-white">
-                {t.title}
-              </h1>
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <div className="mb-3 flex items-center gap-3"><Gauge className="text-cyan-400" /><div><h2 className="text-xl font-bold text-white">Slippage</h2><p className="text-sm text-zinc-400">{fr ? "Seuil minimum appliqué aux swaps et transmis aux cotations." : "Minimum output tolerance applied to swaps and sent with quotes."}</p></div></div>
+          <div className="flex flex-wrap gap-2">{SLIPPAGE_OPTIONS.map((bps) => {
+            const value = `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
+            return <button key={bps} type="button" aria-pressed={slippageBps === bps} onClick={() => setSlippageBps(bps)} className={`rounded-xl px-4 py-2 font-medium transition ${slippageBps === bps ? "bg-cyan-500 text-black" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"}`}>{value}</button>;
+          })}</div>
+        </section>
 
-              <p className="mt-2 text-zinc-400">
-                {t.subtitle}
-              </p>
-            </div>
-          </div>
-        </div>
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <div className="mb-3 flex items-center gap-3"><Globe className="text-cyan-400" /><h2 className="text-xl font-bold text-white">{fr ? "Réseau utilisé" : "Active network"}</h2></div>
+          <p className="rounded-xl bg-zinc-900 p-4 text-sm text-white" aria-live="polite">{network || (fr ? "Réseau en cours de vérification…" : "Checking active network…")}</p>
+          <p className="mt-2 text-xs text-zinc-500">{fr ? "Lecture seule · configuré par l’application" : "Read only · configured by the application"}</p>
+        </section>
 
-        {/* Slippage */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="mb-3 flex items-center gap-3">
-            <Gauge className="text-cyan-400" />
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <div className="mb-3 flex items-center gap-3"><Globe className="text-cyan-400" /><h2 className="text-xl font-bold text-white">{fr ? "Langue" : "Language"}</h2></div>
+          <div className="flex gap-2">{(["Français", "English"] as const).map((value) => <button key={value} type="button" aria-pressed={language === value} onClick={() => setLanguage(value)} className={`rounded-xl px-4 py-2 font-medium transition ${language === value ? "bg-cyan-500 text-black" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"}`}>{value}</button>)}</div>
+        </section>
 
-            <h2 className="text-xl font-bold text-white">
-              {t.slippage}
-            </h2>
-          </div>
+        <section aria-disabled="true" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 opacity-70">
+          <div className="flex items-start gap-3"><Bell className="mt-0.5 text-zinc-500" /><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-white">{fr ? "Notifications" : "Notifications"}</h2><span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{unavailable}</span></div><p className="mt-1 text-sm text-zinc-400">{fr ? "Les notifications ne sont pas encore prises en charge." : "Notifications are not implemented yet."}</p></div></div>
+        </section>
 
-          <div className="flex gap-2">
-            {["0.1%", "0.5%", "1%", "3%"].map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSlippage(value)}
-                className={`rounded-xl px-4 py-2 font-medium transition ${
-                  slippage === value
-                    ? "bg-cyan-500 text-black"
-                    : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        </div>
+        <section aria-disabled="true" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 opacity-70">
+          <div className="flex items-start gap-3"><Wallet className="mt-0.5 text-zinc-500" /><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-white">Wallet</h2><span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{unavailable}</span></div><p className="mt-1 text-sm text-zinc-400">{fr ? "Aucune préférence wallet supplémentaire n’est disponible." : "No additional wallet preferences are available."}</p></div></div>
+        </section>
 
-        {/* Réseau */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="mb-3 flex items-center gap-3">
-            <Globe className="text-cyan-400" />
-
-            <h2 className="text-xl font-bold text-white">
-              {t.network}
-            </h2>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded-xl bg-cyan-500 px-4 py-2 font-medium text-black"
-            >
-              Mainnet
-            </button>
-          </div>
-        </div>
-
-        {/* Langue */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="mb-3 flex items-center gap-3">
-            <Globe className="text-cyan-400" />
-
-            <h2 className="text-xl font-bold text-white">
-              {t.language}
-            </h2>
-          </div>
-
-          <div className="flex gap-2">
-            {(["Français", "English"] as Language[]).map(
-              (value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setLanguage(value)}
-                  className={`rounded-xl px-4 py-2 font-medium transition ${
-                    language === value
-                      ? "bg-cyan-500 text-black"
-                      : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                  }`}
-                >
-                  {value}
-                </button>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Bell className="text-cyan-400" />
-
-              <div>
-                <h2 className="font-bold text-white">
-                  {t.notifications}
-                </h2>
-
-                <p className="text-sm text-zinc-400">
-                  {t.notificationDescription}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                setNotifications(!notifications)
-              }
-              className={`h-8 w-16 rounded-full transition ${
-                notifications
-                  ? "bg-cyan-500"
-                  : "bg-zinc-700"
-              }`}
-            >
-              <div
-                className={`h-7 w-7 rounded-full bg-white transition ${
-                  notifications
-                    ? "translate-x-8"
-                    : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* Wallet */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="flex items-center gap-3">
-            <Wallet className="text-cyan-400" />
-
-            <div>
-              <h2 className="font-bold text-white">
-                {t.wallet}
-              </h2>
-
-              <p className="text-sm text-zinc-400">
-                {t.walletDescription}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Sécurité */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="flex items-center gap-3">
-            <Shield className="text-cyan-400" />
-
-            <div>
-              <h2 className="font-bold text-white">
-                {t.security}
-              </h2>
-
-              <p className="text-sm text-zinc-400">
-                {t.securityDescription}
-              </p>
-            </div>
-          </div>
-        </div>
+        <section aria-disabled="true" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 opacity-70">
+          <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 text-zinc-500" /><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-white">{fr ? "Sécurité" : "Security"}</h2><span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{unavailable}</span></div><p className="mt-1 text-sm text-zinc-400">{fr ? "Les protections de sécurité supplémentaires ne sont pas encore disponibles." : "Additional security controls are not implemented yet."}</p></div></div>
+        </section>
       </div>
     </MainLayout>
   );

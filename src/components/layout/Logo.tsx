@@ -1,9 +1,13 @@
 export default function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500 text-xl font-bold text-black">
-        Z
-      </div>
+      <img
+        src="/images/zingswap-logo.png"
+        alt="ZingSwap"
+        width={1310}
+        height={1200}
+        className="h-12 w-12 object-contain"
+      />
 
       <div>
         <h2 className="text-xl font-bold text-white">

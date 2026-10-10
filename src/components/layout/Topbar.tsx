@@ -12,12 +12,10 @@ export default function Topbar() {
 
   const labels = {
     Français: {
-      dashboard: "Tableau de bord",
       connectWallet: "Connecter le wallet",
       search: "Rechercher un token...",
     },
     English: {
-      dashboard: "Dashboard",
       connectWallet: "Connect Wallet",
       search: "Search token...",
     },
@@ -38,9 +36,19 @@ export default function Topbar() {
     <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:px-6 md:py-4">
       {/* Ligne du haut */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">
-          {t.dashboard}
-        </h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/images/zingswap-logo.png"
+            alt="ZingSwap"
+            width={1310}
+            height={1200}
+            className="h-10 w-10 object-contain"
+          />
+
+          <span className="text-xl font-bold text-white">
+            ZingSwap
+          </span>
+        </div>
 
         <button
           onClick={handleWallet}
