@@ -22,6 +22,7 @@ export default function TokenSelector({
             flex
             w-full
             items-center
+            min-w-0
             gap-3
             rounded-lg
             p-3
@@ -34,12 +35,12 @@ export default function TokenSelector({
             {token.symbol.slice(0, 1)}
           </div>
 
-          <div>
-            <p className="font-semibold text-white">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold text-white">
               {token.symbol}
             </p>
 
-            <p className="text-sm text-zinc-500">
+            <p className="truncate text-sm text-zinc-500">
               {token.name}
             </p>
           </div>

@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       inputMint === outputMint ||
       typeof amount !== "string" ||
       !/^\d+$/.test(amount) ||
-      BigInt(amount) <= 0n ||
+      BigInt(amount) <= BigInt(0) ||
       !Number.isInteger(inputDecimals) ||
       inputDecimals < 0 ||
       inputDecimals > 18 ||

@@ -18,11 +18,11 @@ export default function PortfolioPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <div className="flex items-center gap-3">
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
             <Wallet className="text-cyan-400" size={28} />
-            <div>
-              <h1 className="text-3xl font-bold text-white">{fr ? "Portefeuille" : "Portfolio"}</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-white sm:text-3xl">{fr ? "Portefeuille" : "Portfolio"}</h1>
               <p className="mt-2 text-zinc-400">{fr ? "Soldes en lecture seule du wallet Solana connecté." : "Read-only balances for the connected Solana wallet."}</p>
             </div>
           </div>
@@ -51,9 +51,9 @@ export default function PortfolioPage() {
             {state.assets.length === 0 ? <p className="py-8 text-center text-zinc-400">{fr ? "Aucun actif détecté." : "No assets found."}</p> : <div className="space-y-3">
               {state.assets.map((asset) => {
                 const price = state.prices[asset.mint];
-                return <article key={asset.mint} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-zinc-900 p-4">
-                  <div className="flex min-w-0 items-center gap-3"><Coins className="shrink-0 text-cyan-400" /><div className="min-w-0"><p className="font-semibold text-white">{asset.symbol}<span className="ml-2 font-normal text-zinc-400">{asset.name}</span></p><p className="truncate font-mono text-xs text-zinc-500">{asset.mint}</p></div></div>
-                  <div className="text-right"><p className="font-medium tabular-nums text-white">{amountFormat(asset.amount, asset.decimals)} <span className="text-zinc-400">{asset.symbol}</span></p>{price && <p className="mt-1 text-sm tabular-nums text-zinc-400">{usdFormat.format(asset.amount * price.usd)}</p>}</div>
+                return <article key={asset.mint} className="flex min-w-0 flex-col gap-3 rounded-xl bg-zinc-900 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="flex min-w-0 items-center gap-3"><Coins className="shrink-0 text-cyan-400" /><div className="min-w-0"><p className="break-words font-semibold text-white">{asset.symbol}<span className="ml-2 font-normal text-zinc-400">{asset.name}</span></p><p className="truncate font-mono text-xs text-zinc-500">{asset.mint}</p></div></div>
+                  <div className="min-w-0 sm:text-right"><p className="break-words font-medium tabular-nums text-white">{amountFormat(asset.amount, asset.decimals)} <span className="text-zinc-400">{asset.symbol}</span></p>{price && <p className="mt-1 break-words text-sm tabular-nums text-zinc-400">{usdFormat.format(asset.amount * price.usd)}</p>}</div>
                 </article>;
               })}
             </div>}

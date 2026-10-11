@@ -62,7 +62,7 @@ export default function AnalyticsChart({ data, loading, error, period, onPeriodC
         </div>
       </div>
 
-      <div className="relative h-[320px]">
+      <div className="relative h-[260px] sm:h-[320px]">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-zinc-400" role="status">Chargement de l’historique…</div>
         ) : error ? (
@@ -71,7 +71,7 @@ export default function AnalyticsChart({ data, loading, error, period, onPeriodC
           <div className="flex h-full items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/50 px-6 text-center text-sm text-zinc-400">Aucune série historique n’est disponible pour cette paire et cette période.</div>
         ) : (
           chart && <div className="relative h-full w-full overflow-hidden">
-            {hovered != null && data[hovered] && <div className="pointer-events-none absolute left-3 top-2 z-10 rounded-lg border border-zinc-700 bg-zinc-950/95 px-3 py-2 text-xs text-zinc-200 shadow-xl">
+            {hovered != null && data[hovered] && <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] break-words rounded-lg border border-zinc-700 bg-zinc-950/95 px-3 py-2 text-xs text-zinc-200 shadow-xl sm:left-3">
               <p className="mb-1 text-zinc-400">{new Date(data[hovered].time * 1000).toLocaleString("fr-FR")}</p>
               <p>Ouverture <span className="font-medium text-white">{currencyFormat(data[hovered].open)}</span></p>
               <p>Plus haut <span className="font-medium text-white">{currencyFormat(data[hovered].high)}</span></p>

@@ -114,17 +114,17 @@ export default function ChartPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <div className="flex items-center gap-3">
+        <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
             <BarChart3 className="text-cyan-400" size={28} />
-            <div>
-              <h1 className="text-3xl font-bold text-white">Graphique de marché</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-white sm:text-3xl">Graphique de marché</h1>
               <p className="mt-2 text-zinc-400">Rechercher un token Solana et consulter son historique de prix.</p>
             </div>
           </div>
         </header>
 
-        <form onSubmit={searchToken} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+        <form onSubmit={searchToken} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
           <label htmlFor="market-search" className="sr-only">Nom, symbole ou adresse mint du token</label>
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-zinc-900 px-4 py-3">
@@ -134,7 +134,7 @@ export default function ChartPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Nom, symbole ou adresse mint Solana"
-                className="w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
+                className="min-w-0 w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
               />
             </div>
             <button type="submit" disabled={searching} className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-wait disabled:opacity-60">

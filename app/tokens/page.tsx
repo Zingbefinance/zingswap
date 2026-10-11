@@ -11,6 +11,9 @@ import {
 } from "@/lib/tokens/tokenRegistry";
 import { Token } from "@/lib/tokens/types";
 import { useSelectedToken } from "@/components/providers/TokenContext";
+import { getSwapNetwork } from "@/lib/lifi/chains";
+
+type SearchToken = Token & { address?: string; chainId?: number; logoURI?: string; priceUSD?: string | number };
 
 function TokensContent() {
   const router = useRouter();
@@ -22,10 +25,14 @@ function TokensContent() {
   } = useSelectedToken();
 
   const side = searchParams.get("side");
+  const network = searchParams.get("network");
+  const isEvmSearch = Boolean(network);
+  const networkName = network ? getSwapNetwork(Number(network))?.name ?? `Réseau ${network}` : "";
 
-  const [tokens, setTokens] = useState<Token[]>(
+  const [tokens, setTokens] = useState<SearchToken[]>(
     getLocalTokenList()
   );
+  const [evmTokenList, setEvmTokenList] = useState<SearchToken[]>([]);
 
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,6 +44,28 @@ function TokensContent() {
   const [pricesUnavailable, setPricesUnavailable] = useState(false);
 
   useEffect(() => {
+    if (!network) return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    fetch(`/api/lifi?resource=tokens&chainId=${encodeURIComponent(network)}`, { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json() as { tokens?: Record<string, SearchToken[]>; error?: string };
+        if (!response.ok) throw new Error(payload.error || "Impossible de charger les tokens de ce réseau.");
+        return payload.tokens?.[network] ?? [];
+      })
+      .then((list) => {
+        if (!cancelled) setEvmTokenList(list
+          .filter((token) => token.chainId === Number(network) && typeof token.address === "string")
+          .map((token) => ({ ...token, mint: token.address! })));
+      })
+      .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Impossible de charger les tokens du réseau."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [network]);
+
+  useEffect(() => {
+    if (isEvmSearch) return;
     if (tokens.length === 0) {
       setPrices({});
       setPricesLoading(false);
@@ -71,7 +100,7 @@ function TokensContent() {
     return () => {
       cancelled = true;
     };
-  }, [tokens]);
+  }, [tokens, isEvmSearch]);
 
   const formatUsd = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -83,6 +112,14 @@ function TokensContent() {
 
   useEffect(() => {
     const query = search.trim();
+
+    if (isEvmSearch) {
+      const normalized = query.toLocaleLowerCase();
+      setTokens(evmTokenList.filter((token) =>
+        `${token.symbol} ${token.name} ${token.mint}`.toLocaleLowerCase().includes(normalized),
+      ));
+      return;
+    }
 
     if (!query) {
       setTokens(getLocalTokenList());
@@ -127,9 +164,19 @@ function TokensContent() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search]);
+  }, [search, isEvmSearch, evmTokenList]);
 
-  const handleSelectToken = (token: Token) => {
+  const handleSelectToken = (token: SearchToken) => {
+    if (isEvmSearch) {
+      if ((side !== "from" && side !== "to") || token.chainId !== Number(network)) return;
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("side");
+      params.delete("network");
+      params.set("fromToken", side === "from" ? token.mint : params.get("fromToken") ?? "");
+      params.set("toToken", side === "to" ? token.mint : params.get("toToken") ?? "");
+      router.push(`/?${params.toString()}`);
+      return;
+    }
     setSelectedToken({
       symbol: token.symbol,
       name: token.name,
@@ -146,13 +193,17 @@ function TokensContent() {
     router.push("/");
   };
 
+  const backHref = isEvmSearch
+    ? `/?${(() => { const params = new URLSearchParams(searchParams.toString()); params.delete("side"); params.delete("network"); return params.toString(); })()}`
+    : "/";
+
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-6 text-white">
+    <main className="min-h-screen overflow-x-hidden bg-zinc-950 px-3 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white sm:px-4 sm:py-6">
       <div className="mx-auto w-full max-w-2xl">
 
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-6 flex min-w-0 items-start gap-3">
           <Link
-            href="/"
+            href={backHref}
             className="
               rounded-lg
               bg-zinc-900
@@ -166,13 +217,14 @@ function TokensContent() {
             <ArrowLeft size={20} />
           </Link>
 
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold">
               Rechercher un token
             </h1>
 
             <p className="text-sm text-zinc-500">
-              {side === "from"
+              {isEvmSearch ? `${side === "from" ? "Choisissez le token à échanger" : "Choisissez le token à recevoir"} sur ${networkName}.`
+                : side === "from"
                 ? "Choisissez le token à échanger."
                 : side === "to"
                   ? "Choisissez le token à recevoir."
@@ -281,21 +333,23 @@ function TokensContent() {
                     }
                     className="
                       flex
+                      min-w-0
                       w-full
                       items-center
                       justify-between
                       rounded-xl
                       bg-zinc-900
-                      p-4
+                      gap-3
+                      p-3 sm:p-4
                       text-left
                       transition
                       hover:bg-zinc-800
                     "
                   >
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
 
-                      <div
+                      {token.logoURI ? <img src={token.logoURI} alt="" className="h-10 w-10 shrink-0 rounded-full bg-zinc-800" /> : <div
                         className="
                           flex
                           h-10
@@ -311,10 +365,10 @@ function TokensContent() {
                         "
                       >
                         {token.symbol.slice(0, 1)}
-                      </div>
+                      </div>}
 
                       <div className="min-w-0">
-                        <p className="font-semibold text-white">
+                        <p className="truncate font-semibold text-white">
                           {token.symbol}
                         </p>
 
@@ -323,15 +377,19 @@ function TokensContent() {
                         </p>
 
                         <p className="truncate text-xs text-zinc-700">
-                          {token.mint}
+                          {isEvmSearch ? "" : token.mint}
                         </p>
                       </div>
 
                     </div>
 
-                    <div className="ml-3 shrink-0 text-right">
+                    <div className="max-w-[42%] shrink-0 text-right">
                       <p className="text-sm font-medium text-zinc-200">
-                        {pricesLoading
+                        {token.priceUSD != null && Number.isFinite(Number(token.priceUSD)) && Number(token.priceUSD) > 0
+                          ? formatUsd(Number(token.priceUSD))
+                          : isEvmSearch
+                            ? ""
+                            : pricesLoading
                           ? "Chargement du prix..."
                           : prices[token.mint]
                             ? formatUsd(prices[token.mint].usd)

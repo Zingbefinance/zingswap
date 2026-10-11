@@ -3,7 +3,7 @@ import { Flame, Image as ImageIcon, Rocket } from "lucide-react";
 
 import MainLayout from "@/components/layout/MainLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
-import SwapCard from "@/features/swap/components/SwapCard";
+import SwapNetworkSwitcher from "@/features/swap/components/SwapNetworkSwitcher";
 import { getTrendingTokens, zingNews } from "@/lib/zingHub";
 import ZingNewsCarousel from "@/components/zinghub/ZingNewsCarousel";
 export default async function Home() {
@@ -14,7 +14,7 @@ export default async function Home() {
 
         {/* Swap en premier sur mobile */}
         <div className="order-1 md:order-2">
-          <SwapCard />
+          <SwapNetworkSwitcher />
         </div>
 
         {/* Dashboard */}

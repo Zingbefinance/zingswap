@@ -575,7 +575,7 @@ await removeLiquidity(
 
 </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
   <div className="rounded-xl bg-zinc-900 p-3">
 
@@ -690,7 +690,7 @@ await removeLiquidity(
   {userPosition && (
     <div className="space-y-3">
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
   <div className="rounded-xl bg-zinc-900 p-3">
     <p className="text-xs text-zinc-500">
@@ -724,7 +724,7 @@ await removeLiquidity(
   </p>
 </div>
 
-     <div className="grid grid-cols-2 gap-3">
+     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
   <div className="rounded-xl bg-zinc-900 p-3">
     <p className="text-xs text-zinc-500">

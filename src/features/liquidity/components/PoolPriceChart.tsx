@@ -10,7 +10,7 @@ export default function PoolPriceChart({
   prices,
 }: PoolPriceChartProps) {
   return (
-    <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
+    <div className="min-w-0 rounded-2xl border bg-white p-4 shadow-lg dark:bg-zinc-900 sm:p-6">
       <div className="mb-5">
         <h2 className="text-xl font-bold">
           Prix spot du pool ZTC / WSOL
@@ -27,7 +27,7 @@ export default function PoolPriceChart({
             1 WSOL
           </p>
 
-          <p className="mt-2 text-4xl font-bold">
+          <p className="mt-2 break-words text-3xl font-bold sm:text-4xl">
             {prices.ztcPerWsol.toFixed(6)}
           </p>
 
@@ -37,13 +37,13 @@ export default function PoolPriceChart({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-xl border p-3">
           <p className="text-xs text-zinc-500">
             Prix spot · 1 ZTC = WSOL
           </p>
 
-          <p className="mt-1 font-semibold">
+          <p className="mt-1 break-words font-semibold">
             {prices.wsolPerZtc.toFixed(9)}
           </p>
         </div>
@@ -53,7 +53,7 @@ export default function PoolPriceChart({
             Prix spot · 1 WSOL = ZTC
           </p>
 
-          <p className="mt-1 font-semibold">
+          <p className="mt-1 break-words font-semibold">
             {prices.ztcPerWsol.toFixed(6)}
           </p>
         </div>

@@ -15,7 +15,7 @@ export default function LiquidityPage() {
             EN-TÊTE
         ============================================== */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 md:p-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5 md:p-6">
   <h1 className="text-2xl font-bold text-white">
     Liquidity
   </h1>
@@ -67,7 +67,7 @@ export default function LiquidityPage() {
             WALLET
         ============================================== */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
 
           <h2 className="text-xl font-bold text-white">
             Wallet

@@ -388,7 +388,7 @@ export default function SwapCard() {
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       <h2 className="text-lg md:text-xl font-bold text-white">
         Swap
       </h2>
@@ -410,7 +410,7 @@ export default function SwapCard() {
             />
           </div>
 
-          <div className="mt-2 flex justify-between">
+          <div className="mt-2 flex min-w-0 justify-between">
             <input
               type="number"
               min="0"
@@ -509,7 +509,7 @@ export default function SwapCard() {
             />
           </div>
 
-          <div className="mt-2 flex justify-between">
+          <div className="mt-2 flex min-w-0 justify-between">
             <input
               type="text"
               value={
@@ -581,12 +581,12 @@ export default function SwapCard() {
         {/* DETAILS */}
         <div className="space-y-1.5 rounded-xl bg-zinc-900 p-3 text-xs">
 
-          <div className="flex justify-between text-zinc-400">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Slippage</span>
             <span>0.50%</span>
           </div>
 
-          <div className="flex justify-between text-zinc-400">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Price Impact</span>
             <span>
               {currentJupiterQuote?.priceImpact != null
@@ -595,7 +595,7 @@ export default function SwapCard() {
             </span>
           </div>
 
-          <div className="flex justify-between text-zinc-400">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Coût réseau estimé</span>
             <span>
               {currentJupiterQuote?.signatureFeeLamports != null ||
@@ -608,7 +608,7 @@ export default function SwapCard() {
             </span>
           </div>
 
-          <div className="flex justify-between gap-3 text-zinc-400">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Route</span>
             <span className="text-right">
               {currentJupiterQuote
@@ -619,7 +619,7 @@ export default function SwapCard() {
             </span>
           </div>
 
-          <div className="flex justify-between text-zinc-400">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Frais de swap</span>
             <span>
               {currentJupiterQuote?.feeBps != null

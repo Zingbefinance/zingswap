@@ -35,7 +35,7 @@ export default function PoolChart({
       : 0;
 
   return (
-    <div className="rounded-2xl border bg-white p-6 shadow-lg dark:bg-zinc-900">
+    <div className="min-w-0 rounded-2xl border bg-white p-4 shadow-lg dark:bg-zinc-900 sm:p-6">
       <div className="mb-5">
         <h2 className="text-xl font-bold">
           État du pool
@@ -49,12 +49,12 @@ export default function PoolChart({
       <div className="space-y-5">
 
         <div>
-          <div className="mb-2 flex items-center justify-between text-sm">
+          <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-sm">
             <span className="font-medium">
               ZTC
             </span>
 
-            <span className="font-mono">
+            <span className="break-words text-right font-mono">
               {ztcReserve.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
             </span>
           </div>
@@ -70,12 +70,12 @@ export default function PoolChart({
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between text-sm">
+          <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-sm">
             <span className="font-medium">
               WSOL
             </span>
 
-            <span className="font-mono">
+            <span className="break-words text-right font-mono">
               {wsolReserve.toLocaleString("fr-FR", { maximumFractionDigits: 9 })}
             </span>
           </div>
@@ -92,14 +92,14 @@ export default function PoolChart({
 
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
+      <div className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
 
         <div className="rounded-xl border p-3">
           <p className="text-xs text-zinc-500">
             Réserve ZTC
           </p>
 
-          <p className="mt-1 font-semibold">
+          <p className="mt-1 break-words font-semibold">
             {ztcReserve.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
           </p>
         </div>
@@ -109,7 +109,7 @@ export default function PoolChart({
             Réserve WSOL
           </p>
 
-          <p className="mt-1 font-semibold">
+          <p className="mt-1 break-words font-semibold">
             {wsolReserve.toLocaleString("fr-FR", { maximumFractionDigits: 9 })}
           </p>
         </div>

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       inputMint === outputMint ||
       typeof amount !== "string" ||
       !/^\d+$/.test(amount) ||
-      BigInt(amount) <= 0n ||
+      BigInt(amount) <= BigInt(0) ||
       typeof taker !== "string" ||
       !PUBLIC_KEY_PATTERN.test(taker) ||
       ![10, 50, 100, 300].includes(slippageBps)

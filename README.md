@@ -16,6 +16,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Wallets
+
+- Solana keeps Phantom and Solflare and automatically includes compatible wallets registered through Wallet Standard.
+- EVM wallets are discovered through EIP-6963, with a legacy EIP-1193 fallback. Ethereum and BNB Smart Chain are the supported EVM networks.
+- Trust Wallet mobile is supported through its in-app DApp browser. On mobile, use **Open in Trust Wallet mobile** in the wallet menu to open the current page there.
+
+No new public environment variable is required for wallet connections. `NEXT_PUBLIC_HELIUS_RPC` is optional and selects the Solana RPC endpoint; the app uses Solana mainnet's public endpoint if it is unset. No wallet key or signing secret belongs in environment variables.
+
+The current connection UI does not provide WalletConnect QR/deep-link pairing from arbitrary mobile browsers. Trust Wallet users should open the app through its DApp browser link; EVM wallets outside that browser must expose an EIP-6963 or EIP-1193 provider.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

@@ -13,10 +13,12 @@ export default function TokenButton({ token, onClick }: Props) {
       className="
         flex
         items-center
+        min-w-0
+        max-w-full
         gap-2
         rounded-xl
         bg-zinc-800
-        px-4
+        px-3
         py-2
         font-semibold
         text-white
@@ -30,7 +32,7 @@ export default function TokenButton({ token, onClick }: Props) {
         {token.symbol.slice(0, 1)}
       </div>
 
-      {token.symbol}
+      <span className="max-w-[35vw] truncate sm:max-w-none">{token.symbol}</span>
 
       <span>▼</span>
     </button>

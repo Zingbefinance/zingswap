@@ -41,8 +41,8 @@ export default function SettingsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <div className="flex items-center gap-3"><Settings className="text-cyan-400" size={28} /><div><h1 className="text-3xl font-bold text-white">{fr ? "Paramètres" : "Settings"}</h1><p className="mt-2 text-zinc-400">{fr ? "Préférences utilisées par ZingSwap." : "Preferences used by ZingSwap."}</p></div></div>
+        <header className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
+          <div className="flex min-w-0 items-start gap-3"><Settings className="mt-1 shrink-0 text-cyan-400" size={28} /><div className="min-w-0"><h1 className="text-2xl font-bold text-white sm:text-3xl">{fr ? "Paramètres" : "Settings"}</h1><p className="mt-2 text-zinc-400">{fr ? "Préférences utilisées par ZingSwap." : "Preferences used by ZingSwap."}</p></div></div>
         </header>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
@@ -55,7 +55,7 @@ export default function SettingsPage() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
           <div className="mb-3 flex items-center gap-3"><Globe className="text-cyan-400" /><h2 className="text-xl font-bold text-white">{fr ? "Réseau utilisé" : "Active network"}</h2></div>
-          <p className="rounded-xl bg-zinc-900 p-4 text-sm text-white" aria-live="polite">{network || (fr ? "Réseau en cours de vérification…" : "Checking active network…")}</p>
+          <p className="break-words rounded-xl bg-zinc-900 p-4 text-sm text-white" aria-live="polite">{network || (fr ? "Réseau en cours de vérification…" : "Checking active network…")}</p>
           <p className="mt-2 text-xs text-zinc-500">{fr ? "Lecture seule · configuré par l’application" : "Read only · configured by the application"}</p>
         </section>
 

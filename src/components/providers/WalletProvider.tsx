@@ -3,16 +3,15 @@
 import { LanguageProvider } from "./LanguageContext";
 import { TokenProvider } from "./TokenContext";
 import { SettingsProvider } from "./SettingsContext";
+import { EvmWalletProvider } from "./EvmWalletProvider";
 import { ReactNode, useMemo } from "react";
 import {
   ConnectionProvider,
   WalletProvider as SolanaWalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
+import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -35,16 +34,18 @@ export default function WalletProvider({ children }: Props) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          <LanguageProvider>
-            <SettingsProvider>
-              <TokenProvider>{children}</TokenProvider>
-            </SettingsProvider>
-          </LanguageProvider>
-        </WalletModalProvider>
-      </SolanaWalletProvider>
-    </ConnectionProvider>
+    <EvmWalletProvider>
+      <ConnectionProvider endpoint={endpoint}>
+        <SolanaWalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>
+            <LanguageProvider>
+              <SettingsProvider>
+                <TokenProvider>{children}</TokenProvider>
+              </SettingsProvider>
+            </LanguageProvider>
+          </WalletModalProvider>
+        </SolanaWalletProvider>
+      </ConnectionProvider>
+    </EvmWalletProvider>
   );
 }
