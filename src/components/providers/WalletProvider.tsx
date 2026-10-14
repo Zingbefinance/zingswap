@@ -12,6 +12,7 @@ import {
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
+import { TrustWalletAdapter } from "@solana/wallet-adapter-trust";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -29,6 +30,7 @@ export default function WalletProvider({ children }: Props) {
     () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
+      new TrustWalletAdapter(),
     ],
     []
   );
