@@ -9,16 +9,18 @@ type DashboardMetrics = {
   feePercent: number | null;
 };
 
+type MetricKey = "tvlUsd" | "volume24hUsd" | "swapPercent" | "feePercent";
+
 const metrics: {
-  key: keyof DashboardMetrics;
+  key: MetricKey;
   label: string;
   source: string;
   format: (value: number) => string;
 }[] = [
   {
     key: "tvlUsd",
-    label: "TVL",
-    source: "Liquidité USD de la paire ZTC/WSOL · DexScreener",
+    label: "TVL ZING/WSOL",
+    source: "Réserves réelles du pool valorisées aux prix USD DexScreener.",
     format: (value) =>
       new Intl.NumberFormat("fr-FR", {
         style: "currency",
@@ -54,7 +56,7 @@ const metrics: {
 ];
 
 export default function StatsGrid() {
-  const [selected, setSelected] = useState<keyof DashboardMetrics>("tvlUsd");
+  const [selected, setSelected] = useState<MetricKey>("tvlUsd");
   const [data, setData] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -68,7 +70,12 @@ export default function StatsGrid() {
       .then(setData)
       .catch(() => {
         if (!controller.signal.aborted) {
-          setData({ tvlUsd: null, volume24hUsd: null, swapPercent: null, feePercent: null });
+          setData({
+            tvlUsd: null,
+            volume24hUsd: null,
+            swapPercent: null,
+            feePercent: null,
+          });
         }
       })
       .finally(() => {
@@ -98,7 +105,7 @@ export default function StatsGrid() {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5" aria-live="polite">
         <p className="text-sm text-zinc-400">{metric.label}</p>
         <p className="mt-2 text-3xl font-bold text-white">
-          {loading ? "Chargement…" : value == null ? "Indisponible" : metric.format(value)}
+          {loading ? "Chargement…" : value == null ? "—" : metric.format(value)}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{metric.source}</p>
       </div>
