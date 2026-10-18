@@ -17,11 +17,11 @@ export default function LiquidityPage() {
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5 md:p-6">
   <h1 className="text-2xl font-bold text-white">
-    Liquidity
+    Liquidité ZTC/SOL sur Solana
   </h1>
 
   <p className="mt-1 text-sm text-zinc-400">
-    Provide liquidity to ZingSwap pools and earn trading fees.
+    Consultez le pool ZTC/SOL, ajoutez ou retirez de la liquidité et vérifiez votre position avec un wallet Solana.
   </p>
 </div>
 

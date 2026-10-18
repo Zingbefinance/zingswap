@@ -6,6 +6,12 @@ import StatsGrid from "@/components/dashboard/StatsGrid";
 import SwapNetworkSwitcher from "@/features/swap/components/SwapNetworkSwitcher";
 import { getTrendingTokens, zingNews } from "@/lib/zingHub";
 import ZingNewsCarousel from "@/components/zinghub/ZingNewsCarousel";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Échange de tokens sur Solana et réseaux EVM",
+  description: "ZingSwap réunit l’échange de tokens sur Solana, Ethereum et BNB Smart Chain, la recherche de tokens, les graphiques de marché et le suivi de portefeuille Solana.",
+};
 export default async function Home() {
   const trendingTokens = await getTrendingTokens();
   return (
@@ -16,6 +22,16 @@ export default async function Home() {
         <div className="order-1 md:order-2">
           <SwapNetworkSwitcher />
         </div>
+
+        <section aria-labelledby="supported-assets-title" className="order-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <h2 id="supported-assets-title" className="text-lg font-bold text-white">Réseaux, tokens et outils disponibles</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">
+            Le sélecteur de swap propose Solana, Ethereum Mainnet et BNB Smart Chain. Sur Solana, SOL et ZTC sont les tokens locaux de ZingSwap; la recherche peut aussi trouver des tokens via Jupiter. Pour Ethereum et BNB Smart Chain, la liste de tokens est chargée via LI.FI. Les routes et la disponibilité dépendent des cotations et des services réseau.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">
+            ZingSwap comprend aussi des graphiques de paires Solana, un affichage en lecture seule des actifs et NFT du wallet Solana connecté, ainsi qu’une interface de liquidité pour le pool ZTC/SOL.
+          </p>
+        </section>
 
         {/* Dashboard */}
         <div className="order-2 md:order-1">
