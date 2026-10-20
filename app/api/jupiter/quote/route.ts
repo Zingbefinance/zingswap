@@ -4,6 +4,8 @@ const JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order";
 const MINT_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 interface JupiterOrderResponse {
+  inputMint?: string;
+  outputMint?: string;
   inAmount?: string;
   outAmount?: string;
   router?: string;
@@ -104,6 +106,23 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!order.inAmount || !/^\d+$/.test(order.inAmount) || BigInt(order.inAmount) !== BigInt(amount)) {
+      return NextResponse.json(
+        { error: "Réponse Jupiter invalide : le montant brut d’entrée ne correspond pas à la demande." },
+        { status: 502, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    if (
+      (order.inputMint && order.inputMint !== inputMint) ||
+      (order.outputMint && order.outputMint !== outputMint)
+    ) {
+      return NextResponse.json(
+        { error: "Réponse Jupiter invalide : les mints ne correspondent pas à la demande." },
+        { status: 502, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     if (!order.outAmount || !/^\d+$/.test(order.outAmount)) {
       return NextResponse.json(
         { error: "Réponse Jupiter invalide : le montant de sortie est absent." },
@@ -129,10 +148,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        amountIn: formatUnits(amount, inputDecimals),
+        amountIn: formatUnits(order.inAmount, inputDecimals),
         amountOut: formatUnits(order.outAmount, outputDecimals),
-        amountInRaw: amount,
+        amountInRaw: order.inAmount,
         amountOutRaw: order.outAmount,
+        inputMint,
+        outputMint,
+        inputDecimals,
+        outputDecimals,
         router: order.router ?? null,
         route: route.length > 0 ? route : order.router ? [order.router] : [],
         feeBps: typeof order.feeBps === "number" ? order.feeBps : null,

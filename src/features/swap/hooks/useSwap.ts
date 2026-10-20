@@ -51,12 +51,18 @@ interface SwapResult {
   signature: string;
 }
 interface QuoteResult {
+  inputMint: string;
+  outputMint: string;
   amountIn: string;
   amountOut: string;
   amountInRaw: string;
   amountOutRaw: string;
   feeRaw: string;
   feeBps: number;
+  reserveInRaw: string;
+  reserveOutRaw: string;
+  inputDecimals: number;
+  outputDecimals: number;
   minAmountOutRaw: string;
 }
 
@@ -65,6 +71,10 @@ export interface JupiterQuoteResult {
   amountOut: string;
   amountInRaw: string;
   amountOutRaw: string;
+  inputMint: string;
+  outputMint: string;
+  inputDecimals: number;
+  outputDecimals: number;
   router: string | null;
   route: string[];
   feeBps: number | null;
@@ -138,6 +148,14 @@ function toRawAmount(
     fraction.padEnd(decimals, "0");
 
   return BigInt(`${whole}${paddedFraction}`);
+}
+
+function formatRawAmount(rawAmount: bigint, decimals: number): string {
+  const raw = rawAmount.toString().padStart(decimals + 1, "0");
+  if (decimals === 0) return raw;
+  const whole = raw.slice(0, -decimals);
+  const fraction = raw.slice(-decimals).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
 }
 
 export function useSwap() {
@@ -359,8 +377,6 @@ BigInt(10_000);
   numerator / denominator;
 
 
-const outputBase = 10 ** outputDecimals;
-
 if (amountOutRaw <= BigInt(0)) {
   throw new Error(
     "Le montant de sortie est trop petit."
@@ -368,11 +384,10 @@ if (amountOutRaw <= BigInt(0)) {
 }
 
 return {
+  inputMint: fromMint.toBase58(),
+  outputMint: toMint.toBase58(),
   amountIn: amount,
-  amountOut: (
-    Number(amountOutRaw) /
-    outputBase
-  ).toFixed(6),
+  amountOut: formatRawAmount(amountOutRaw, outputDecimals),
   amountInRaw:
     amountInRaw.toString(),
   amountOutRaw:
@@ -381,6 +396,10 @@ return {
   feeRaw:
     fee.toString(),
   feeBps,
+  reserveInRaw: reserveIn.toString(),
+  reserveOutRaw: reserveOut.toString(),
+  inputDecimals,
+  outputDecimals,
 };
     },
     [connection]
@@ -391,25 +410,20 @@ return {
       amount,
       fromMint,
       toMint,
+      inputDecimals,
+      outputDecimals,
       slippageBps,
       signal,
     }: {
       amount: string;
       fromMint: PublicKey;
       toMint: PublicKey;
+      inputDecimals: number;
+      outputDecimals: number;
       slippageBps: number;
       signal?: AbortSignal;
     }): Promise<JupiterQuoteResult> => {
-      const [inputToken, outputToken] = await Promise.all([
-        getTokenByMint(fromMint.toBase58()),
-        getTokenByMint(toMint.toBase58()),
-      ]);
-
-      if (!inputToken || !outputToken) {
-        throw new Error("Métadonnées des tokens indisponibles pour la route externe.");
-      }
-
-      const amountInRaw = toRawAmount(amount, inputToken.decimals).toString();
+      const amountInRaw = toRawAmount(amount, inputDecimals).toString();
       const response = await fetch("/api/jupiter/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -417,8 +431,8 @@ return {
           inputMint: fromMint.toBase58(),
           outputMint: toMint.toBase58(),
           amount: amountInRaw,
-          inputDecimals: inputToken.decimals,
-          outputDecimals: outputToken.decimals,
+          inputDecimals,
+          outputDecimals,
           slippageBps,
         }),
         cache: "no-store",

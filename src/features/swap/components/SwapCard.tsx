@@ -14,6 +14,45 @@ import { TOKENS } from "../../../../lib/tokens/tokens";
 import { Token } from "../../../../lib/tokens/types";
 import { useSwap, type JupiterQuoteResult } from "../hooks/useSwap";
 
+const ZTC_MINT = "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu";
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
+const amountFormat = new Intl.NumberFormat("fr-FR", { maximumSignificantDigits: 8 });
+
+function formatAmount(value: number) {
+  return Number.isFinite(value) && value > 0 ? amountFormat.format(value) : "indisponible";
+}
+
+function formatAtomicAmount(raw: bigint, decimals: number) {
+  const value = raw.toString().padStart(decimals + 1, "0");
+  if (decimals === 0) return value;
+  const whole = value.slice(0, -decimals);
+  const fraction = value.slice(-decimals).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+function parseAtomicAmount(value: string, decimals: number): bigint | null {
+  const normalized = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  if (fraction.length > decimals) return null;
+  return BigInt(`${whole}${fraction.padEnd(decimals, "0")}`);
+}
+
+function formatQuoteTime(timestamp: number) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(timestamp);
+}
+
+type QuoteSnapshot<T> = {
+  requestKey: string;
+  requestedAt: number;
+  receivedAt: number;
+  quote: T;
+};
+
 export default function SwapCard() {
   const router = useRouter();
 
@@ -44,25 +83,62 @@ export default function SwapCard() {
 
   const [fromBalance, setFromBalance] = useState("0.0000");
   const [toBalance, setToBalance] = useState("0.0000");
-  const [toAmount, setToAmount] = useState("");
+  const [fromBalanceSnapshot, setFromBalanceSnapshot] = useState<{ key: string; exact: string | null } | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
   const [quoteLoading, setQuoteLoading] = useState(false);
-  const [jupiterQuote, setJupiterQuote] = useState<JupiterQuoteResult | null>(null);
+  const [jupiterQuoteSnapshot, setJupiterQuoteSnapshot] = useState<QuoteSnapshot<JupiterQuoteResult> | null>(null);
+  const [zingQuoteSnapshot, setZingQuoteSnapshot] = useState<QuoteSnapshot<Awaited<ReturnType<typeof getQuote>>> | null>(null);
   const [jupiterError, setJupiterError] = useState("");
   const [jupiterErrorKey, setJupiterErrorKey] = useState("");
-  const [zingFeeBps, setZingFeeBps] = useState<number | null>(null);
-  const [quoteKey, setQuoteKey] = useState("");
+  const [solUsdPrice, setSolUsdPrice] = useState<number | null>(null);
   const currentQuoteKey = JSON.stringify([
     fromAmount,
     fromToken.mint,
     toToken.mint,
     slippageBps,
   ]);
-  const quoteMatchesInput = quoteKey === currentQuoteKey;
-  const currentJupiterQuote = quoteMatchesInput ? jupiterQuote : null;
+  const currentJupiterQuote = jupiterQuoteSnapshot?.requestKey === currentQuoteKey
+    ? jupiterQuoteSnapshot.quote
+    : null;
+  const currentZingQuote = zingQuoteSnapshot?.requestKey === currentQuoteKey
+    ? zingQuoteSnapshot.quote
+    : null;
+  const quoteMatchesInput = selectedRoute === "jupiter"
+    ? currentJupiterQuote !== null
+    : currentZingQuote !== null;
+  const currentBalanceKey = publicKey ? `${publicKey.toBase58()}:${fromToken.mint}` : "";
+  const currentFromBalanceExact = fromBalanceSnapshot?.key === currentBalanceKey
+    ? fromBalanceSnapshot.exact
+    : null;
+  const inputRawAmount = parseAtomicAmount(fromAmount, fromToken.decimals);
+  const currentBalanceRaw = currentFromBalanceExact == null
+    ? null
+    : parseAtomicAmount(currentFromBalanceExact, fromToken.decimals);
+  const balanceCheckApplies = connected && fromToken.mint === WSOL_MINT && fromAmount.trim() !== "" && Number(fromAmount) > 0;
+  const balanceUnavailable = balanceCheckApplies && (balanceLoading || inputRawAmount === null || currentBalanceRaw === null);
+  const insufficientSol = balanceCheckApplies && !balanceUnavailable && inputRawAmount !== null && currentBalanceRaw !== null && inputRawAmount > currentBalanceRaw;
+  const missingSolAmount = insufficientSol && inputRawAmount !== null && currentBalanceRaw !== null
+    ? formatAtomicAmount(inputRawAmount - currentBalanceRaw, fromToken.decimals)
+    : null;
   const activeQuoteLoading = quoteLoading || (
     Boolean(fromAmount.trim()) && Number(fromAmount) > 0 &&
     selectedRoute === "jupiter" && !currentJupiterQuote
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/tokens/prices?mints=${WSOL_MINT}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Prix SOL indisponible");
+        return response.json() as Promise<{ prices?: Record<string, { usd?: number }> }>;
+      })
+      .then((payload) => {
+        const price = payload.prices?.[WSOL_MINT]?.usd;
+        if (!cancelled) setSolUsdPrice(typeof price === "number" && Number.isFinite(price) && price > 0 ? price : null);
+      })
+      .catch(() => { if (!cancelled) setSolUsdPrice(null); });
+    return () => { cancelled = true; };
+  }, []);
       useEffect(() => {
     if (!selectedSide || !selectedToken?.mint) {
       return;
@@ -100,16 +176,18 @@ export default function SwapCard() {
 
   const getTokenBalance = async (
     token: Token
-  ): Promise<string> => {
+  ): Promise<{ display: string; exact: string | null }> => {
     if (!publicKey) {
-      return "0.0000";
+      return { display: "0.0000", exact: null };
     }
 
     try {
-      if (token.symbol === "SOL") {
-        const lamports = await connection.getBalance(publicKey);
-
-        return (lamports / 1_000_000_000).toFixed(4);
+      if (token.mint === WSOL_MINT) {
+        const lamports = await connection.getBalance(publicKey, "confirmed");
+        return {
+          display: (lamports / 1_000_000_000).toFixed(4),
+          exact: formatAtomicAmount(BigInt(lamports), 9),
+        };
       }
 
       const mint = new PublicKey(token.mint);
@@ -120,18 +198,19 @@ export default function SwapCard() {
       );
 
       const accountInfo =
-        await connection.getTokenAccountBalance(tokenAccount);
+        await connection.getTokenAccountBalance(tokenAccount, "confirmed");
 
-      return Number(
-        accountInfo.value.uiAmount ?? 0
-      ).toFixed(4);
+      return {
+        display: Number(accountInfo.value.uiAmount ?? 0).toFixed(4),
+        exact: formatAtomicAmount(BigInt(accountInfo.value.amount), accountInfo.value.decimals),
+      };
     } catch (error) {
       console.error(
         `Erreur lecture balance ${token.symbol} :`,
         error
       );
 
-      return "0.0000";
+      return { display: "0.0000", exact: null };
     }
   };
 
@@ -139,6 +218,7 @@ export default function SwapCard() {
     if (!publicKey || !connected) {
       setFromBalance("0.0000");
       setToBalance("0.0000");
+      setFromBalanceSnapshot(null);
       return;
     }
 
@@ -151,8 +231,9 @@ export default function SwapCard() {
         getTokenBalance(toToken),
       ]);
 
-      setFromBalance(nextFromBalance);
-      setToBalance(nextToBalance);
+      setFromBalance(nextFromBalance.display);
+      setToBalance(nextToBalance.display);
+      if (publicKey) setFromBalanceSnapshot({ key: `${publicKey.toBase58()}:${fromToken.mint}`, exact: nextFromBalance.exact });
     } catch (error) {
       console.error(
         "Erreur actualisation des balances :",
@@ -168,23 +249,24 @@ export default function SwapCard() {
       if (!publicKey || !connected) {
         setFromBalance("0.0000");
         setToBalance("0.0000");
+        setFromBalanceSnapshot(null);
+        setBalanceLoading(false);
         return;
       }
 
-      const [
-        nextFromBalance,
-        nextToBalance,
-      ] = await Promise.all([
-        getTokenBalance(fromToken),
-        getTokenBalance(toToken),
-      ]);
-
-      if (cancelled) {
-        return;
+      setBalanceLoading(true);
+      try {
+        const [nextFromBalance, nextToBalance] = await Promise.all([
+          getTokenBalance(fromToken),
+          getTokenBalance(toToken),
+        ]);
+        if (cancelled) return;
+        setFromBalance(nextFromBalance.display);
+        setToBalance(nextToBalance.display);
+        setFromBalanceSnapshot({ key: `${publicKey.toBase58()}:${fromToken.mint}`, exact: nextFromBalance.exact });
+      } finally {
+        if (!cancelled) setBalanceLoading(false);
       }
-
-      setFromBalance(nextFromBalance);
-      setToBalance(nextToBalance);
     };
 
     loadBalances();
@@ -211,12 +293,10 @@ export default function SwapCard() {
     ]);
 
     const loadQuote = () => {
-      setToAmount("");
-      setJupiterQuote(null);
+      setJupiterQuoteSnapshot(null);
+      setZingQuoteSnapshot(null);
       setJupiterError("");
       setJupiterErrorKey("");
-      setZingFeeBps(null);
-      setQuoteKey("");
       setQuoteLoading(false);
 
       if (
@@ -231,10 +311,13 @@ export default function SwapCard() {
           amount: fromAmount,
           fromMint: new PublicKey(fromToken.mint),
           toMint: new PublicKey(toToken.mint),
+          inputDecimals: fromToken.decimals,
+          outputDecimals: toToken.decimals,
           slippageBps,
       };
 
       const timer = window.setTimeout(() => {
+        const requestedAt = Date.now();
         let zingFailed = false;
         let jupiterFailed = false;
         let latestZingQuote: Awaited<ReturnType<typeof getQuote>> | null = null;
@@ -243,9 +326,7 @@ export default function SwapCard() {
         getQuote(params).then((quote) => {
           if (cancelled) return;
           latestZingQuote = quote;
-          setToAmount(quote.amountOut);
-          setZingFeeBps(quote.feeBps);
-          setQuoteKey(requestKey);
+          setZingQuoteSnapshot({ requestKey, requestedAt, receivedAt: Date.now(), quote });
           if (selectedRouteRef.current === "zing" || jupiterFailed) {
             if (jupiterFailed) updateSelectedRoute("zing");
             setQuoteLoading(false);
@@ -255,7 +336,6 @@ export default function SwapCard() {
           zingFailed = true;
           if (latestJupiterQuote) {
             updateSelectedRoute("jupiter");
-            setToAmount(latestJupiterQuote.amountOut);
             setQuoteLoading(false);
           } else if (selectedRouteRef.current === "zing") {
             setQuoteLoading(true);
@@ -266,14 +346,12 @@ export default function SwapCard() {
         getJupiterQuote({ ...params, signal: controller.signal }).then((quote) => {
           if (cancelled) return;
           latestJupiterQuote = quote;
-          setJupiterQuote(quote);
-          setQuoteKey(requestKey);
+          setJupiterQuoteSnapshot({ requestKey, requestedAt, receivedAt: Date.now(), quote });
           if (zingFailed) {
             updateSelectedRoute("jupiter");
-            setToAmount(quote.amountOut);
             setQuoteLoading(false);
-          } else if (selectedRouteRef.current === "jupiter") {
-            setToAmount(quote.amountOut);
+          } else if (selectedRouteRef.current === "jupiter" || !latestZingQuote) {
+            updateSelectedRoute("jupiter");
             setQuoteLoading(false);
           }
         }).catch((reason: unknown) => {
@@ -288,7 +366,6 @@ export default function SwapCard() {
             : "Estimation du pool ZingSwap affichée si disponible."}`);
           if (selectedRouteRef.current === "jupiter" && latestZingQuote) {
             updateSelectedRoute("zing");
-            setToAmount(latestZingQuote.amountOut);
             setQuoteLoading(false);
           } else if (selectedRouteRef.current === "jupiter" && !zingFailed) {
             setQuoteLoading(true);
@@ -318,6 +395,60 @@ export default function SwapCard() {
     slippageBps,
   ]);
 
+  const isZtcSolPair =
+    (fromToken.mint === ZTC_MINT && toToken.mint === WSOL_MINT) ||
+    (fromToken.mint === WSOL_MINT && toToken.mint === ZTC_MINT);
+  const reserveIn = currentZingQuote
+    ? Number(BigInt(currentZingQuote.reserveInRaw)) / 10 ** currentZingQuote.inputDecimals
+    : null;
+  const reserveOut = currentZingQuote
+    ? Number(BigInt(currentZingQuote.reserveOutRaw)) / 10 ** currentZingQuote.outputDecimals
+    : null;
+  const spotOutputPerInput = reserveIn && reserveOut ? reserveOut / reserveIn : null;
+  const spotZtcPerSol = currentZingQuote && isZtcSolPair
+    ? fromToken.mint === WSOL_MINT
+      ? spotOutputPerInput
+      : spotOutputPerInput && spotOutputPerInput > 0 ? 1 / spotOutputPerInput : null
+    : null;
+  const spotZtcUsd = spotZtcPerSol && solUsdPrice ? solUsdPrice / spotZtcPerSol : null;
+  const inputAmountNumber = Number(fromAmount);
+  const inputSolEquivalent = isZtcSolPair && Number.isFinite(inputAmountNumber) && inputAmountNumber > 0
+    ? fromToken.mint === WSOL_MINT
+      ? inputAmountNumber
+      : spotZtcPerSol ? inputAmountNumber / spotZtcPerSol : null
+    : null;
+  const wsolReserve = currentZingQuote && isZtcSolPair
+    ? fromToken.mint === WSOL_MINT
+      ? reserveIn
+      : reserveOut
+    : null;
+  const wsolReserveShare = inputSolEquivalent && wsolReserve ? inputSolEquivalent / wsolReserve : null;
+  const zingFeeAmount = currentZingQuote
+    ? Number(BigInt(currentZingQuote.feeRaw)) / 10 ** currentZingQuote.inputDecimals
+    : null;
+  const zingEstimatedOutput = currentZingQuote
+    ? Number(BigInt(currentZingQuote.amountOutRaw)) / 10 ** currentZingQuote.outputDecimals
+    : null;
+  const zingPriceImpact = currentZingQuote && spotOutputPerInput && zingFeeAmount != null && Number(fromAmount) > zingFeeAmount
+    ? Math.max(0, (1 - (zingEstimatedOutput ?? 0) / ((Number(fromAmount) - zingFeeAmount) * spotOutputPerInput)) * 100)
+    : null;
+  const quotesComparable = Boolean(
+    currentZingQuote && currentJupiterQuote &&
+    zingQuoteSnapshot?.requestKey === currentQuoteKey &&
+    jupiterQuoteSnapshot?.requestKey === currentQuoteKey &&
+    zingQuoteSnapshot?.requestKey === jupiterQuoteSnapshot?.requestKey &&
+    zingQuoteSnapshot?.requestedAt === jupiterQuoteSnapshot?.requestedAt &&
+    currentZingQuote.amountInRaw === currentJupiterQuote.amountInRaw &&
+    currentZingQuote.inputDecimals === currentJupiterQuote.inputDecimals &&
+    currentZingQuote.outputDecimals === currentJupiterQuote.outputDecimals &&
+    currentZingQuote.inputMint === currentJupiterQuote.inputMint &&
+    currentZingQuote.outputMint === currentJupiterQuote.outputMint &&
+    currentZingQuote.inputMint === fromToken.mint &&
+    currentZingQuote.outputMint === toToken.mint &&
+    currentJupiterQuote.inputMint === fromToken.mint &&
+    currentJupiterQuote.outputMint === toToken.mint,
+  );
+
   const handleSwap = async () => {
     setMessage("");
 
@@ -328,6 +459,16 @@ export default function SwapCard() {
 
     if (!fromAmount.trim()) {
       setMessage("Entre un montant à échanger.");
+      return;
+    }
+
+    if (balanceUnavailable) {
+      setMessage("Solde SOL indisponible ou en cours de vérification. Le swap reste bloqué.");
+      return;
+    }
+
+    if (insufficientSol && missingSolAmount) {
+      setMessage(`Solde SOL insuffisant : il manque ${missingSolAmount} SOL.`);
       return;
     }
 
@@ -463,6 +604,16 @@ export default function SwapCard() {
               MAX
             </button>
           </div>
+          {balanceCheckApplies && balanceUnavailable && (
+            <p role="status" className="mt-2 text-xs text-amber-300">
+              {balanceLoading ? "Vérification du solde SOL…" : "Solde SOL indisponible ; le swap est bloqué."}
+            </p>
+          )}
+          {insufficientSol && missingSolAmount && (
+            <p role="alert" className="mt-2 text-xs text-amber-300">
+              Solde SOL insuffisant : il manque {missingSolAmount} SOL. Le swap est bloqué.
+            </p>
+          )}
         </div>
 
         {/* SWITCH */}
@@ -517,7 +668,7 @@ export default function SwapCard() {
                   ? "..."
                   : selectedRoute === "jupiter"
                     ? currentJupiterQuote?.amountOut || "0.0"
-                    : toAmount || "0.0"
+                    : currentZingQuote?.amountOut || "0.0"
               }
               readOnly
               className="
@@ -535,11 +686,11 @@ export default function SwapCard() {
             Balance : {toBalance}{" "}
             {toToken.symbol}
           </p>
-          {quoteMatchesInput && toAmount && !quoteLoading && (
+          {quoteMatchesInput && (selectedRoute === "jupiter" ? currentJupiterQuote : currentZingQuote) && !quoteLoading && (
             <p className="mt-1 text-right text-[11px] text-zinc-500">
               {selectedRoute === "jupiter"
                 ? "Estimation externe · ordre actualisé avant signature"
-                : zingFeeBps != null
+                : currentZingQuote != null
                   ? "Estimation du pool ZingSwap"
                   : "Estimation externe indicative · aucun pool ZingSwap disponible"}
             </p>
@@ -552,7 +703,7 @@ export default function SwapCard() {
             type="button"
             role="radio"
             aria-checked={selectedRoute === "zing"}
-            disabled={loading || (Boolean(fromAmount.trim()) && zingFeeBps === null)}
+            disabled={loading || (Boolean(fromAmount.trim()) && !currentZingQuote)}
             onClick={() => updateSelectedRoute("zing")}
             className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
               selectedRoute === "zing"
@@ -587,13 +738,51 @@ export default function SwapCard() {
           </div>
 
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
-            <span>Price Impact</span>
+            <span>Impact de prix · {selectedRoute === "jupiter" ? "route externe" : "pool ZingSwap"}</span>
             <span>
-              {currentJupiterQuote?.priceImpact != null
-                ? `${currentJupiterQuote.priceImpact.toFixed(3)}%`
-                : "--"}
+              {selectedRoute === "jupiter"
+                ? currentJupiterQuote?.priceImpact != null ? `${currentJupiterQuote.priceImpact.toFixed(3)}%` : "--"
+                : zingPriceImpact != null ? `${zingPriceImpact.toFixed(3)}% · hors frais de swap` : "--"}
             </span>
           </div>
+
+          {isZtcSolPair && currentZingQuote && (
+            <>
+              <div className="mt-2 border-t border-zinc-800 pt-2">
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-300">
+                  <span>Prix spot indicatif du pool ZTC/SOL</span>
+                  <span>{spotZtcPerSol ? `1 SOL ≈ ${formatAmount(spotZtcPerSol)} ZTC` : "prix indisponible"}</span>
+                </div>
+                <p className="mt-1 text-right text-[11px] text-zinc-500">Propre au pool ZingSwap · indicatif, pas un prix de marché universel</p>
+                <div className="mt-1 flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
+                  <span>Prix USD indicatif ZTC · pool ZingSwap</span>
+                  <span>{spotZtcUsd ? `$${formatAmount(spotZtcUsd)}` : "prix indisponible"}</span>
+                </div>
+                <p className="mt-1 text-right text-[11px] text-zinc-500">Calcul : prix SOL/USD de DexScreener ÷ ZTC par SOL · paire retenue par l’API avec liquidité affichée ≥ 50 000 $</p>
+              </div>
+
+              {selectedRoute === "zing" && (
+                <>
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-cyan-300">
+                    <span>Sortie estimée sélectionnée · pool ZingSwap</span>
+                    <span>{currentZingQuote ? `${currentZingQuote.amountOut} ${toToken.symbol}` : "indisponible"}</span>
+                  </div>
+                  <p className="text-right text-[11px] text-zinc-500">Le pool est recoté au lancement du swap ; l’exécution applique le montant minimum selon le slippage.</p>
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
+                    <span>Frais du pool ZingSwap</span>
+                    <span>{zingFeeAmount != null && currentZingQuote ? `${formatAmount(zingFeeAmount)} ${fromToken.symbol} · ${(currentZingQuote.feeBps / 100).toFixed(2)}%` : "indisponibles"}</span>
+                  </div>
+                </>
+              )}
+
+              {wsolReserveShare != null && Number.isFinite(wsolReserveShare) && (
+                <p className={`rounded-lg px-2 py-1.5 ${wsolReserveShare >= 1 ? "bg-amber-500/10 text-amber-300" : "text-zinc-500"}`}>
+                  Saisie équivalente à {formatAmount(wsolReserveShare * 100)}% de la réserve WSOL du pool.
+                  {wsolReserveShare >= 1 ? " Avertissement : le montant atteint ou dépasse toute la réserve WSOL." : ""}
+                </p>
+              )}
+            </>
+          )}
 
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
             <span>Coût réseau estimé</span>
@@ -632,26 +821,49 @@ export default function SwapCard() {
             </span>
           </div>
 
-          <div className="flex justify-between text-zinc-400">
+          {selectedRoute === "jupiter" && <div className="flex justify-between text-zinc-400">
             <span>Frais des pools</span>
             <span>Non fournis séparément</span>
-          </div>
+          </div>}
+
+          {currentZingQuote && selectedRoute === "jupiter" && (
+            <div className="flex justify-between text-zinc-400">
+              <span>Cotation ZingSwap · comparaison uniquement</span>
+              <span>{currentZingQuote.amountOut} {toToken.symbol}</span>
+            </div>
+          )}
 
           {currentJupiterQuote && (
-            <div className="flex justify-between text-cyan-300">
-              <span>Estimation route externe</span>
+            <div className={`flex justify-between ${selectedRoute === "jupiter" ? "text-cyan-300" : "text-zinc-400"}`}>
+              <span>{selectedRoute === "jupiter" ? "Sortie estimée sélectionnée · route externe" : "Cotation externe · comparaison uniquement, non exécutée"}</span>
               <span>{currentJupiterQuote.amountOut} {toToken.symbol}</span>
             </div>
           )}
 
-          <div className="flex justify-between font-semibold text-cyan-400">
+          {selectedRoute === "zing" && currentZingQuote && currentJupiterQuote && (
+            <div className="text-right text-[11px] text-zinc-500">
+              <p>
+                {quotesComparable
+                  ? `Mêmes mints, décimales et montant brut (${currentZingQuote.amountInRaw} unités d’entrée) ; l’écart est entre les cotations reçues, pas une conversion d’affichage.`
+                  : "Montants bruts ou décimales différents : ces cotations ne sont pas directement comparables."}
+              </p>
+              {quotesComparable && zingQuoteSnapshot && jupiterQuoteSnapshot && (
+                <>
+                  <p className="mt-1">Demandes à {formatQuoteTime(zingQuoteSnapshot.requestedAt)} ; réponses reçues à {formatQuoteTime(zingQuoteSnapshot.receivedAt)} (ZingSwap) et {formatQuoteTime(jupiterQuoteSnapshot.receivedAt)} (route externe).</p>
+                  <details className="mt-1 text-left">
+                    <summary className="cursor-pointer">Montants bruts et décimales</summary>
+                    <p className="mt-1 break-all">Entrée {currentZingQuote.amountInRaw} ({currentZingQuote.inputDecimals} déc.) · sortie ZingSwap {currentZingQuote.amountOutRaw} ({currentZingQuote.outputDecimals} déc.) · sortie externe {currentJupiterQuote.amountOutRaw} ({currentJupiterQuote.outputDecimals} déc.)</p>
+                    <p className="break-all">Mint entrée {currentZingQuote.inputMint} · mint sortie {currentZingQuote.outputMint}</p>
+                  </details>
+                </>
+              )}
+            </div>
+          )}
+
+          {selectedRoute === "zing" && !isZtcSolPair && <div className="flex justify-between font-semibold text-cyan-400">
             <span>Frais ZingSwap</span>
-            <span>
-              {zingFeeBps != null
-                ? `${(zingFeeBps / 100).toFixed(2)}%`
-                : "Pool indisponible"}
-            </span>
-          </div>
+            <span>{currentZingQuote ? `${(currentZingQuote.feeBps / 100).toFixed(2)}%` : "Pool indisponible"}</span>
+          </div>}
 
         </div>
 
@@ -678,8 +890,10 @@ export default function SwapCard() {
           disabled={
             loading ||
             activeQuoteLoading ||
+            balanceUnavailable ||
+            insufficientSol ||
             (connected && Boolean(fromAmount.trim()) &&
-              (selectedRoute === "zing" ? !quoteMatchesInput || zingFeeBps === null : !currentJupiterQuote))
+              (selectedRoute === "zing" ? !currentZingQuote : !currentJupiterQuote))
           }
           className="
             w-full
@@ -696,10 +910,14 @@ export default function SwapCard() {
         >
           {loading
             ? "Swap en cours..."
+            : insufficientSol
+              ? "Solde SOL insuffisant"
+              : balanceUnavailable
+                ? "Vérification du solde SOL…"
             : !connected
               ? "Connect Wallet"
               : fromAmount.trim() && !activeQuoteLoading &&
-                (selectedRoute === "zing" ? (!quoteMatchesInput || zingFeeBps === null) : !currentJupiterQuote)
+                (selectedRoute === "zing" ? !currentZingQuote : !currentJupiterQuote)
                 ? selectedRoute === "zing"
                   ? "Pool ZingSwap indisponible"
                   : "Route externe indisponible"
