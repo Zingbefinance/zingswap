@@ -1,7 +1,6 @@
 "use client";
 
 import PoolChart from "./PoolChart";
-import PoolPriceChart from "./PoolPriceChart";
 import { useEffect, useState } from "react";
 import { BN } from "@coral-xyz/anchor";
 import {
@@ -22,7 +21,6 @@ import {
 } from "../../../lib/anchor/zingswap";
 import {
   getPoolData,
-  calculatePoolPrices,
   type PoolData,
 } from "../lib/pool";
 import {
@@ -104,9 +102,27 @@ const [tickUpper, setTickUpper] =
   useState(100);
 const [localError, setLocalError] =
   useState("");
-  const poolPrices = poolData
-    ? calculatePoolPrices(poolData)
-    : null;
+  const [ztcUsdPrice, setZtcUsdPrice] = useState<number | null>(null);
+  const [ztcPriceUnavailable, setZtcPriceUnavailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setZtcUsdPrice(null);
+    setZtcPriceUnavailable(false);
+    fetch(`/api/tokens/prices?mints=${ZTC_MINT.toBase58()}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Prix indisponible");
+        return response.json() as Promise<{ prices?: Record<string, { usd: number }> }>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const price = data.prices?.[ZTC_MINT.toBase58()]?.usd;
+        if (typeof price === "number" && Number.isFinite(price) && price > 0) setZtcUsdPrice(price);
+        else setZtcPriceUnavailable(true);
+      })
+      .catch(() => { if (!cancelled) setZtcPriceUnavailable(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   // ==================================================
   // CHARGEMENT DU POOL
@@ -512,36 +528,21 @@ await removeLiquidity(
         {poolData && (
           <div className="space-y-3">
 
-            {poolPrices && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                <div className="rounded-xl bg-zinc-900 p-3">
-  <p className="text-xs text-zinc-500">
-    ZTC Price
-  </p>
-
-  <p className="mt-1 text-sm font-semibold text-white">
-    1 ZTC ={" "}
-    {poolPrices.wsolPerZtc.toFixed(9)}{" "}
-    WSOL
-  </p>
-</div>
-<div className="rounded-xl bg-zinc-900 p-3">
-  <p className="text-xs text-zinc-500">
-    WSOL Price
-  </p>
-
-  <p className="mt-1 text-sm font-semibold text-white">
-    1 WSOL ={" "}
-    {poolPrices.ztcPerWsol.toFixed(6)}{" "}
-    ZTC
-  </p>
-</div>
-
-  
-
-              </div>
-            )}
+            <p className="text-sm text-zinc-400">
+              {ztcUsdPrice != null
+                ? <>Prix ZTC : ${ztcUsdPrice.toPrecision(6)} · source DexScreener · paire Solana avec au moins 50 000 $ de liquidité</>
+                : ztcPriceUnavailable
+                  ? "Prix ZTC indisponible · aucune paire Solana suffisamment liquide sur DexScreener."
+                  : "Chargement du prix ZTC · source DexScreener, paire Solana avec au moins 50 000 $ de liquidité…"}
+            </p>
+            <a
+              href={`https://explorer.solana.com/address/${poolData.address.toBase58()}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 items-center break-all text-sm text-cyan-300 underline underline-offset-4"
+            >
+              Pool ZTC / WSOL : {poolData.address.toBase58()} · Explorateur Solana
+            </a>
 
             <div className="rounded-xl bg-zinc-900 p-3">
 
@@ -640,11 +641,6 @@ await removeLiquidity(
         <PoolChart pool={poolData} />
       )}
 
-      {poolPrices && (
-        <PoolPriceChart
-          prices={poolPrices}
-        />
-      )}
       {/* ==============================================
     POSITION CLMM
 ============================================== */}
@@ -860,16 +856,22 @@ await removeLiquidity(
         <button
           type="button"
           onClick={handleRemoveLiquidity}
-          disabled={loading}
+          disabled={loading || positionLoading || !userPosition || !publicKey || !userPosition.owner.equals(publicKey)}
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading
             ? "Retrait en cours..."
-            : connected
+            : positionLoading
+            ? "Chargement de la position..."
+            : userPosition && publicKey && userPosition.owner.equals(publicKey)
             ? "Retirer toute la liquidité"
-            : "Connecter le wallet"}
+            : "Aucune position à retirer"}
         </button>
-
+        {!positionLoading && !userPosition && (
+          <p className="mt-3 text-center text-xs text-zinc-500">
+            Connecte le wallet qui détient une position ZTC / WSOL pour afficher son retrait.
+          </p>
+        )}
       </div>
 
       {/* ==============================================
