@@ -894,6 +894,8 @@ export default function SwapCard() {
           <p className="text-xs text-zinc-500">
             {jupiterErrorKey === currentQuoteKey && jupiterError
               ? jupiterError
+              : isZtcSolPair && currentJupiterQuote && !validJupiterQuote
+                ? "Réponse externe écartée : montant, mints ou décimales différents de la saisie actuelle."
               : isZtcSolPair && !validJupiterQuote
                 ? "Swap externe indisponible : aucune cotation Jupiter valide. L’action est désactivée."
                 : activeRoute === "jupiter"
