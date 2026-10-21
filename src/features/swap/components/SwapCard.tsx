@@ -107,8 +107,23 @@ export default function SwapCard() {
   const currentZingQuote = zingQuoteSnapshot?.requestKey === currentQuoteKey
     ? zingQuoteSnapshot.quote
     : null;
+  const validJupiterQuote = (() => {
+    if (!currentJupiterQuote) return null;
+    try {
+      return currentJupiterQuote.inputMint === fromToken.mint &&
+        currentJupiterQuote.outputMint === toToken.mint &&
+        currentJupiterQuote.inputDecimals === fromToken.decimals &&
+        currentJupiterQuote.outputDecimals === toToken.decimals &&
+        currentJupiterQuote.amountInRaw === parseAtomicAmount(fromAmount, fromToken.decimals)?.toString() &&
+        /^\d+$/.test(currentJupiterQuote.amountOutRaw) && BigInt(currentJupiterQuote.amountOutRaw) > BigInt(0)
+        ? currentJupiterQuote
+        : null;
+    } catch {
+      return null;
+    }
+  })();
   const quoteMatchesInput = activeRoute === "jupiter" || isZtcSolPair
-    ? currentJupiterQuote !== null
+    ? isZtcSolPair ? validJupiterQuote !== null : currentJupiterQuote !== null
     : currentZingQuote !== null;
   const currentBalanceKey = publicKey ? `${publicKey.toBase58()}:${fromToken.mint}` : "";
   const currentFromBalanceExact = fromBalanceSnapshot?.key === currentBalanceKey
@@ -399,19 +414,6 @@ export default function SwapCard() {
     slippageBps,
   ]);
 
-  const validJupiterQuote = (() => {
-    if (!currentJupiterQuote) return null;
-    try {
-      return currentJupiterQuote.inputMint === fromToken.mint &&
-        currentJupiterQuote.outputMint === toToken.mint &&
-        currentJupiterQuote.amountInRaw === parseAtomicAmount(fromAmount, fromToken.decimals)?.toString() &&
-        /^\d+$/.test(currentJupiterQuote.amountOutRaw) && BigInt(currentJupiterQuote.amountOutRaw) > BigInt(0)
-        ? currentJupiterQuote
-        : null;
-    } catch {
-      return null;
-    }
-  })();
   const reserveIn = currentZingQuote
     ? Number(BigInt(currentZingQuote.reserveInRaw)) / 10 ** currentZingQuote.inputDecimals
     : null;
@@ -683,10 +685,12 @@ export default function SwapCard() {
             <input
               type="text"
               value={
-                (activeQuoteLoading || (!quoteMatchesInput && Boolean(fromAmount.trim())))
+                activeQuoteLoading
                   ? "..."
                   : activeRoute === "jupiter"
-                    ? currentJupiterQuote?.amountOut || "0.0"
+                    ? isZtcSolPair
+                      ? validJupiterQuote?.amountOut || (fromAmount.trim() ? "Route externe indisponible" : "0.0")
+                      : currentJupiterQuote?.amountOut || "0.0"
                     : currentZingQuote?.amountOut || "0.0"
               }
               readOnly
