@@ -23,6 +23,21 @@ export default function LiquidityPage() {
   <p className="mt-1 text-sm text-zinc-400">
     Consultez le pool ZTC/SOL, ajoutez ou retirez de la liquidité et vérifiez votre position avec un wallet Solana.
   </p>
+  <div className="mt-4 flex flex-wrap items-center gap-3">
+    <button
+      type="button"
+      aria-controls="add-liquidity-form"
+      onClick={() => document.getElementById("add-liquidity-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+      className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300"
+    >
+      Ajouter de la liquidité
+    </button>
+    <p className="text-sm text-zinc-400">
+      {connected && publicKey
+        ? "Wallet Solana connecté."
+        : "Un wallet Solana doit être connecté pour ajouter de la liquidité."}
+    </p>
+  </div>
 </div>
 
         {/* ==============================================

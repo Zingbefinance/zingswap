@@ -771,14 +771,14 @@ await removeLiquidity(
           AJOUT DE LIQUIDITÉ
       ============================================== */}
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:p-5 text-white shadow-lg">
+      <div id="add-liquidity-form" className="scroll-mt-24 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:p-5 text-white shadow-lg">
   <div className="mb-4">
     <h2 className="text-lg font-bold">
-      Add Liquidity
+      Ajouter de la liquidité
     </h2>
 
     <p className="mt-1 text-xs text-zinc-500">
-      Provide ZTC and WSOL to earn trading fees.
+      Indique les montants ZTC et WSOL à ajouter au pool.
     </p>
   </div>
 
@@ -819,6 +819,12 @@ await removeLiquidity(
   />
 
 </div>
+
+        <p className="mb-3 text-xs text-zinc-400" role="status">
+          {connected
+            ? "Wallet Solana connecté. Les soldes ZTC et WSOL seront vérifiés avant l’ajout."
+            : "Un wallet Solana doit être connecté. Le bouton ci-dessous permet de le connecter; l’ajout devra ensuite être soumis."}
+        </p>
 
         <button
           type="button"
