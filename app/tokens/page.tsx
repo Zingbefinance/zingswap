@@ -115,8 +115,10 @@ function TokensContent() {
 
     if (isEvmSearch) {
       const normalized = query.toLocaleLowerCase();
+      const selectedChainId = Number(network);
       setTokens(evmTokenList.filter((token) =>
-        `${token.symbol} ${token.name} ${token.mint}`.toLocaleLowerCase().includes(normalized),
+        token.chainId === selectedChainId &&
+        `${token.symbol} ${token.name} ${token.address ?? token.mint}`.toLocaleLowerCase().includes(normalized),
       ));
       return;
     }
@@ -138,7 +140,12 @@ function TokensContent() {
         const result = await searchTokens(query);
 
         if (!cancelled) {
-          setTokens(result);
+          const normalizedQuery = query.toLocaleLowerCase();
+          const localMintMatches = getLocalTokenList().filter((token) =>
+            token.mint.toLocaleLowerCase().includes(normalizedQuery),
+          );
+          const resultMints = new Set(result.map((token) => token.mint));
+          setTokens([...result, ...localMintMatches.filter((token) => !resultMints.has(token.mint))]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -164,7 +171,7 @@ function TokensContent() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, isEvmSearch, evmTokenList]);
+  }, [search, isEvmSearch, network, evmTokenList]);
 
   const handleSelectToken = (token: SearchToken) => {
     if (isEvmSearch) {
@@ -251,7 +258,9 @@ function TokensContent() {
             onChange={(event) =>
               setSearch(event.target.value)
             }
-            placeholder="Rechercher un token..."
+            placeholder={isEvmSearch
+              ? "Rechercher par nom, symbole ou adresse de contrat..."
+              : "Rechercher par nom, symbole ou adresse mint..."}
             autoFocus
             className="
               w-full
