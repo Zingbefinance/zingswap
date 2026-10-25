@@ -13,6 +13,7 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { TrustWalletAdapter } from "@solana/wallet-adapter-trust";
+import { TonWalletProvider } from "./TonConnectProvider";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -27,15 +28,21 @@ export default function WalletProvider({ children }: Props) {
   "https://api.mainnet-beta.solana.com";
 
   const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-      new TrustWalletAdapter(),
-    ],
+    () => {
+      const trustWallet = new TrustWalletAdapter();
+      trustWallet.name = "Trust Wallet" as typeof trustWallet.name;
+
+      return [
+        new PhantomWalletAdapter(),
+        new SolflareWalletAdapter(),
+        trustWallet,
+      ];
+    },
     []
   );
 
   return (
+    <TonWalletProvider>
     <EvmWalletProvider>
       <ConnectionProvider endpoint={endpoint}>
         <SolanaWalletProvider wallets={wallets} autoConnect>
@@ -49,5 +56,6 @@ export default function WalletProvider({ children }: Props) {
         </SolanaWalletProvider>
       </ConnectionProvider>
     </EvmWalletProvider>
+    </TonWalletProvider>
   );
 }

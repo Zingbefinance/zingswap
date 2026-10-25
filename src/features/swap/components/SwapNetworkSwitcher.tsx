@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import SwapCard from "./SwapCard";
 import EvmSwapCard from "./EvmSwapCard";
-import { getSwapNetwork, LIFI_SOLANA_CHAIN_ID, SWAP_NETWORKS, type SwapNetworkId } from "@/lib/lifi/chains";
+import TonSwapCard from "./TonSwapCard";
+import { getSwapNetwork, isTonNetwork, isSolanaNetwork, LIFI_SOLANA_CHAIN_ID, SWAP_NETWORKS, type SwapNetworkId } from "@/lib/lifi/chains";
 
 type NetworkSide = "from" | "to";
 
@@ -79,7 +80,7 @@ export default function SwapNetworkSwitcher() {
               {SWAP_NETWORKS.map((network) => (
                 <button key={network.id} type="button" onClick={() => selectNetwork(network.id)} className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left text-white hover:border-cyan-500">
                   <span className="font-medium">{network.name}</span>
-                  <span className="mt-1 block text-xs text-zinc-500">Chain ID LI.FI : {network.id}</span>
+                  <span className="mt-1 block text-xs text-zinc-500">{network.kind === "ton" ? "TON Connect · Omniston" : `Chain ID LI.FI : ${network.id}`}</span>
                 </button>
               ))}
             </div>
@@ -87,7 +88,11 @@ export default function SwapNetworkSwitcher() {
         </div>
       )}
 
-      {fromChain === LIFI_SOLANA_CHAIN_ID && toChain === LIFI_SOLANA_CHAIN_ID
+      {(isTonNetwork(fromChain) || isTonNetwork(toChain)) && (isSolanaNetwork(fromChain) || isSolanaNetwork(toChain))
+        ? <div className="rounded-2xl border border-amber-800 bg-amber-950/40 p-4 text-sm text-amber-200">Omniston n’inclut pas Solana dans sa matrice de réseaux actuelle. Cette paire n’est pas proposée comme swap TON↔Solana.</div>
+        : isTonNetwork(fromChain) || isTonNetwork(toChain)
+        ? <TonSwapCard fromChain={fromChain} toChain={toChain} />
+        : fromChain === LIFI_SOLANA_CHAIN_ID && toChain === LIFI_SOLANA_CHAIN_ID
         ? <SwapCard />
         : <EvmSwapCard fromChain={fromChain} toChain={toChain} initialFromToken={initialFromToken} initialToToken={initialToToken} />}
     </section>

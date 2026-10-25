@@ -21,8 +21,8 @@ const structuredData = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.zingswap.org"),
-  title: { default: "ZingSwap | Échange et outils pour Solana et EVM", template: "%s | ZingSwap" },
-  description: "Interface ZingSwap pour échanger des tokens sur Solana, Ethereum et BNB Smart Chain, consulter des graphiques, gérer une position de liquidité ZTC/SOL et voir un portefeuille Solana.",
+  title: { default: "ZingSwap | Échange et outils pour Solana, EVM et TON", template: "%s | ZingSwap" },
+  description: "Interface ZingSwap pour échanger des tokens sur Solana, Ethereum, BNB Smart Chain et TON, consulter des graphiques, gérer une position de liquidité ZTC/SOL et voir un portefeuille Solana.",
   alternates: { canonical: "/" },
   robots: { index: true, follow: true },
 };
