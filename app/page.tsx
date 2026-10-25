@@ -9,14 +9,36 @@ import ZingNewsCarousel from "@/components/zinghub/ZingNewsCarousel";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Échange de tokens sur Solana et réseaux EVM",
-  description: "ZingSwap réunit l’échange de tokens sur Solana, Ethereum et BNB Smart Chain, la recherche de tokens, les graphiques de marché et le suivi de portefeuille Solana.",
+  title: "ZingSwap, application web de swap de tokens",
+  description: "ZingSwap est une application web de swap de tokens sur Solana, Ethereum Mainnet et BNB Smart Chain, avec un parcours TON via Omniston. Elle propose aussi une recherche de tokens, des graphiques, un portefeuille Solana en lecture seule et une interface de liquidité ZTC/SOL.",
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    url: "/",
+    siteName: "ZingSwap",
+    title: "ZingSwap, application web de swap de tokens",
+    description: "Swaps sur Solana, Ethereum Mainnet, BNB Smart Chain et parcours TON via Omniston, avec recherche de tokens, graphiques, portefeuille Solana en lecture seule et interface de liquidité ZTC/SOL.",
+    images: [{ url: "/images/zingswap-logo.png", width: 1310, height: 1200, alt: "Logo ZingSwap" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ZingSwap, application web de swap de tokens",
+    description: "Application web ZingSwap pour les swaps sur Solana, Ethereum, BNB Smart Chain et TON.",
+    images: ["/images/zingswap-logo.png"],
+  },
 };
 export default async function Home() {
   const trendingTokens = await getTrendingTokens();
   return (
     <MainLayout>
       <div className="flex flex-col gap-6">
+
+        <section aria-labelledby="home-title" className="order-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <h1 id="home-title" className="text-2xl font-bold text-white">ZingSwap : application web de swap de tokens</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+            ZingSwap réunit des parcours de swap pour Solana, Ethereum Mainnet et BNB Smart Chain, ainsi qu’un parcours TON via Omniston. La disponibilité des routes dépend des paires prises en charge et des cotations disponibles.
+          </p>
+        </section>
 
         {/* Swap en premier sur mobile */}
         <div className="order-1 md:order-2">
