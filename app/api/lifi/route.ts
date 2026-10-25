@@ -99,6 +99,15 @@ export async function GET(request: NextRequest) {
       }
       url = new URL(`${LIFI_API}/tokens`);
       url.searchParams.set("chains", chainId);
+    } else if (resource === "token") {
+      const chainId = params.get("chainId") ?? "";
+      const address = params.get("address") ?? "";
+      if (!ALLOWED_CHAINS.has(chainId) || Number(chainId) === LIFI_SOLANA_CHAIN_ID || !validAddress(chainId, address)) {
+        return NextResponse.json({ error: "Adresse de token invalide pour ce réseau." }, { status: 400 });
+      }
+      url = new URL(`${LIFI_API}/token`);
+      url.searchParams.set("chain", chainId);
+      url.searchParams.set("token", address);
     } else if (resource === "status") {
       const txHash = params.get("txHash") ?? "";
       if (!fromChain || !toChain || !ALLOWED_CHAINS.has(fromChain) || !ALLOWED_CHAINS.has(toChain) || !/^0x[\da-fA-F]{64}$/.test(txHash)) {

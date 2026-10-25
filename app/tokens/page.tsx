@@ -14,6 +14,7 @@ import { useSelectedToken } from "@/components/providers/TokenContext";
 import { getSwapNetwork } from "@/lib/lifi/chains";
 
 type SearchToken = Token & { address?: string; chainId?: number; logoURI?: string; priceUSD?: string | number };
+const EVM_ADDRESS = /^0x[\da-fA-F]{40}$/;
 
 function TokensContent() {
   const router = useRouter();
@@ -114,12 +115,70 @@ function TokensContent() {
     const query = search.trim();
 
     if (isEvmSearch) {
-      const normalized = query.toLocaleLowerCase();
       const selectedChainId = Number(network);
+      if (EVM_ADDRESS.test(query)) {
+        let cancelled = false;
+        const normalizedAddress = query.toLowerCase();
+        const listedToken = evmTokenList.find((token) =>
+          token.chainId === selectedChainId &&
+          (token.address ?? token.mint).toLowerCase() === normalizedAddress &&
+          typeof token.symbol === "string" && token.symbol.trim().length > 0 &&
+          typeof token.name === "string" && token.name.trim().length > 0 &&
+          Number.isInteger(token.decimals) && token.decimals >= 0,
+        );
+
+        if (listedToken) {
+          setTokens([listedToken]);
+          setLoading(false);
+          setError("");
+          return () => { cancelled = true; };
+        }
+
+        setTokens([]);
+        setLoading(true);
+        setError("");
+        fetch(`/api/lifi?resource=token&chainId=${encodeURIComponent(network ?? "")}&address=${encodeURIComponent(query)}`, { cache: "no-store" })
+          .then(async (response) => {
+            const payload = await response.json() as { token?: SearchToken; error?: string } & SearchToken;
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error(payload.error || "Impossible de rechercher ce token sur LI.FI.");
+            return payload.token ?? payload;
+          })
+          .then((token) => {
+            if (!token) {
+              if (!cancelled) setTokens([]);
+              return;
+            }
+            const address = typeof token.address === "string" ? token.address : token.mint;
+            if (cancelled) return;
+            if (
+              token.chainId === selectedChainId &&
+              typeof address === "string" && address.toLowerCase() === normalizedAddress &&
+              typeof token.symbol === "string" && token.symbol.trim().length > 0 &&
+              typeof token.name === "string" && token.name.trim().length > 0 &&
+              Number.isInteger(token.decimals) && token.decimals >= 0
+            ) {
+              setTokens([{ ...token, address, mint: address }]);
+              return;
+            }
+            setTokens([]);
+          })
+          .catch((cause) => {
+            if (cancelled) return;
+            setTokens([]);
+            // An unknown address is an empty result; a failed lookup is a service error.
+            if (cause instanceof Error && !/404|not found|unknown token/i.test(cause.message)) setError(cause.message);
+          })
+          .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+      }
+
+      const normalized = query.toLocaleLowerCase();
       setTokens(evmTokenList.filter((token) =>
         token.chainId === selectedChainId &&
         `${token.symbol} ${token.name} ${token.address ?? token.mint}`.toLocaleLowerCase().includes(normalized),
       ));
+      setLoading(false);
       return;
     }
 
@@ -324,7 +383,7 @@ function TokensContent() {
                   text-zinc-500
                 "
               >
-                Aucun token trouvé.
+                {isEvmSearch && EVM_ADDRESS.test(search.trim()) ? "Token introuvable." : "Aucun token trouvé."}
               </div>
             )}
 
@@ -358,7 +417,7 @@ function TokensContent() {
 
                     <div className="flex min-w-0 flex-1 items-center gap-3">
 
-                      {token.logoURI ? <img src={token.logoURI} alt="" className="h-10 w-10 shrink-0 rounded-full bg-zinc-800" /> : <div
+                      {token.logoURI ? <img src={token.logoURI} alt="" className="h-10 w-10 shrink-0 rounded-full bg-zinc-800" /> : isEvmSearch ? <div className="h-10 w-10 shrink-0 rounded-full bg-zinc-800" /> : <div
                         className="
                           flex
                           h-10
