@@ -6,6 +6,7 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { TOKENS } from "@/lib/tokens/tokens";
 
 export type TokenSide = "from" | "to";
 
@@ -28,6 +29,10 @@ type TokenContextType = {
   setSelectedToken: (token: SelectedToken) => void;
   selectedSide: TokenSide | null;
   setSelectedSide: (side: TokenSide | null) => void;
+  fromToken: (typeof TOKENS)[number];
+  toToken: (typeof TOKENS)[number];
+  selectSwapToken: (side: TokenSide, token: (typeof TOKENS)[number]) => void;
+  setSwapTokens: (fromToken: (typeof TOKENS)[number], toToken: (typeof TOKENS)[number]) => void;
 };
 
 const TokenContext = createContext<TokenContextType | null>(null);
@@ -42,6 +47,12 @@ export function TokenProvider({
 
   const [selectedSide, setSelectedSide] =
     useState<TokenSide | null>(null);
+  const [swapTokens, setSwapTokens] = useState<[typeof TOKENS[number], typeof TOKENS[number]]>([TOKENS[0], TOKENS[1]]);
+  const selectSwapToken = (side: TokenSide, token: typeof TOKENS[number]) => {
+    setSwapTokens(([fromToken, toToken]) => side === "from"
+      ? [token, token.mint === toToken.mint ? fromToken : toToken]
+      : [token.mint === fromToken.mint ? toToken : fromToken, token]);
+  };
 
   return (
     <TokenContext.Provider
@@ -50,6 +61,10 @@ export function TokenProvider({
         setSelectedToken,
         selectedSide,
         setSelectedSide,
+        fromToken: swapTokens[0],
+        toToken: swapTokens[1],
+        selectSwapToken,
+        setSwapTokens: (fromToken, toToken) => setSwapTokens([fromToken, toToken]),
       }}
     >
       {children}
