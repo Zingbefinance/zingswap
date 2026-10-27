@@ -83,8 +83,7 @@ export interface JupiterQuoteResult {
   feeMint: string | null;
   platformFeeBps: number | null;
   referralFeeBpsRequested: number | null;
-  referralConfirmed: boolean;
-  referralNetBps: number | null;
+  referralAccountMatched: boolean;
   poolFees: null;
   priceImpact: number | null;
   signatureFeeLamports: number | null;
@@ -102,6 +101,20 @@ interface JupiterOrderResult {
   expireAt: string | null;
   errorCode: number | null;
   errorMessage: string | null;
+  treasuryFee: {
+    requestedBps: number;
+    presentInOrder: boolean;
+    referralAccountMatched: boolean;
+    totalFeeBps: number | null;
+    totalFeeBpsConfirmed: boolean;
+    feeMintPresent: boolean;
+    platformFeeAmountPresent: boolean;
+    platformFeeAmountPositive: boolean;
+    platformFeeBps: number | null;
+    platformFeeBpsPresent: boolean;
+    expectedJupiterShareBps: number;
+    feeMint: string | null;
+  };
 }
 
 interface JupiterExecuteResult {
@@ -111,6 +124,8 @@ interface JupiterExecuteResult {
   error: string | null;
   totalInputAmount: string | null;
   totalOutputAmount: string | null;
+  inputAmountResult: string | null;
+  outputAmountResult: string | null;
 }
 function toRawAmount(
   amount: string,
@@ -459,12 +474,22 @@ return {
       fromMint,
       toMint,
       slippageBps,
+      onOrderFeeStatus,
     }: {
       amount: string;
       fromMint: PublicKey;
       toMint: PublicKey;
       slippageBps: number;
-    }): Promise<{ signature: string; amountOut: string | null }> => {
+      onOrderFeeStatus?: (fee: JupiterOrderResult["treasuryFee"]) => void;
+    }): Promise<{
+      signature: string;
+      amountOut: string | null;
+      feeAmountObservedRaw: string | null;
+      feeMint: string | null;
+      requestedFeeBps: number;
+      feePresentInOrder: true;
+      treasuryPayoutVerified: false;
+    }> => {
       if (!connected || !publicKey || !signTransaction) {
         throw new Error("Connecte un portefeuille capable de signer les transactions.");
       }
@@ -490,8 +515,34 @@ return {
       const order = (await orderResponse.json()) as JupiterOrderResult & { error?: string };
 
       if (!orderResponse.ok) {
-        throw new Error("Impossible de préparer la transaction via la route externe.");
+        throw new Error(order.error || "Impossible de préparer la transaction via la route externe.");
       }
+      if (
+        !order.treasuryFee?.presentInOrder ||
+        order.treasuryFee.requestedBps !== 50 ||
+        !order.treasuryFee.totalFeeBpsConfirmed ||
+        !order.treasuryFee.platformFeeBpsPresent ||
+        order.treasuryFee.platformFeeBps !== order.treasuryFee.expectedJupiterShareBps ||
+        !order.treasuryFee.platformFeeAmountPresent ||
+        !order.treasuryFee.platformFeeAmountPositive ||
+        !order.treasuryFee.feeMintPresent
+      ) {
+        const feeChecks = order.treasuryFee;
+        const reasons = [
+          !feeChecks?.referralAccountMatched && "referralAccount absent ou différent du compte attendu",
+          feeChecks?.requestedBps !== 50 && "la demande de frais ne correspond pas à 0,50 %",
+          !feeChecks?.totalFeeBpsConfirmed && `feeBps total absent ou inférieur aux 50 pb demandés (${feeChecks?.totalFeeBps ?? "absent"} pb reçu)`,
+          !feeChecks?.feeMintPresent && "feeMint absent ou invalide",
+          !feeChecks?.platformFeeAmountPresent && "platformFee.amount absent ou invalide",
+          feeChecks?.platformFeeAmountPresent && !feeChecks.platformFeeAmountPositive && "platformFee.amount n’est pas positif",
+          !feeChecks?.platformFeeBpsPresent && "platformFee.feeBps absent ou invalide",
+          feeChecks?.platformFeeBpsPresent && feeChecks.platformFeeBps !== feeChecks.expectedJupiterShareBps && `platformFee.feeBps vaut ${feeChecks.platformFeeBps} pb; la part plateforme attendue d’après le partage documenté est ${feeChecks.expectedJupiterShareBps} pb`,
+          feeChecks != null && !feeChecks.presentInOrder && "les champs de frais de l’ordre ne satisfont pas le contrôle complet",
+        ].filter((reason): reason is string => Boolean(reason));
+        throw new Error(`Refus avant signature : ${reasons.join(" ; ")}. /order ne vérifie pas l’initialisation on-chain du referralTokenAccount ni le versement effectif; aucune transaction n’a été signée ni envoyée.`);
+      }
+      onOrderFeeStatus?.(order.treasuryFee);
+
       if (order.transaction === "") {
         throw new Error(
           `La route externe n'a pas pu construire la transaction (code ${order.errorCode ?? "inconnu"}).`
@@ -577,7 +628,32 @@ return {
         );
       }
 
-      return { signature: result.signature, amountOut: result.totalOutputAmount };
+      const confirmation = await connection.confirmTransaction(result.signature, "confirmed");
+      if (confirmation.value.err) {
+        throw new Error("La transaction Jupiter a été incluse mais a échoué sur le réseau.");
+      }
+
+      const rawAmount = (value: string | null) => value && /^\d+$/.test(value) ? BigInt(value) : null;
+      const totalInputAmount = rawAmount(result.totalInputAmount);
+      const inputAmountResult = rawAmount(result.inputAmountResult);
+      const outputAmountResult = rawAmount(result.outputAmountResult);
+      const totalOutputAmount = rawAmount(result.totalOutputAmount);
+      let feeAmountObserved: bigint | null = null;
+      if (order.treasuryFee.feeMint === fromMint.toBase58() && totalInputAmount !== null && inputAmountResult !== null) {
+        feeAmountObserved = totalInputAmount >= inputAmountResult ? totalInputAmount - inputAmountResult : null;
+      } else if (order.treasuryFee.feeMint === toMint.toBase58() && outputAmountResult !== null && totalOutputAmount !== null) {
+        feeAmountObserved = outputAmountResult >= totalOutputAmount ? outputAmountResult - totalOutputAmount : null;
+      }
+
+      return {
+        signature: result.signature,
+        amountOut: result.totalOutputAmount,
+        feeAmountObservedRaw: feeAmountObserved?.toString() ?? null,
+        feeMint: order.treasuryFee.feeMint,
+        requestedFeeBps: order.treasuryFee.requestedBps,
+        feePresentInOrder: true,
+        treasuryPayoutVerified: false,
+      };
     },
     [connected, publicKey, signTransaction, connection]
   );

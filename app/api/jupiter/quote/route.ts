@@ -29,9 +29,9 @@ interface JupiterOrderResponse {
 
 type QuoteErrorType = "configuration" | "authentication" | "rate_limit" | "quota" | "no_route" | "upstream" | "network" | "invalid_request" | "invalid_response" | "cancelled";
 
-function quoteError(message: string, errorType: QuoteErrorType, status: number) {
+function quoteError(message: string, errorType: QuoteErrorType, status: number, upstreamStatus?: number) {
   return NextResponse.json(
-    { error: message, errorType },
+    { error: message, errorType, ...(upstreamStatus ? { upstreamStatus } : {}) },
     { status, headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -129,15 +129,24 @@ export async function POST(request: Request) {
         return quoteError("Quota ou accès facturé Jupiter indisponible. Vérifiez l’offre et le quota de la clé.", "quota", 502);
       }
       if (/referral(?:account| token account).{0,100}(?:not initialized|initiali[sz]ation|does not exist)/i.test(upstreamError)) {
-        return quoteError("Configuration de parrainage invalide ou non initialisée. Vérifiez JUPITER_REFERRAL_ACCOUNT.", "configuration", 502);
+        return quoteError("Jupiter a refusé la cotation : le compte de referral doit être initialisé ou corrigé. Vérifiez la configuration de parrainage.", "configuration", 502, response.status);
       }
       if (isNoRouteError(upstreamError)) {
-        return quoteError("Aucune route externe disponible pour cette paire et ce montant.", "no_route", 404);
+        return quoteError("Aucune route externe disponible pour cette paire et ce montant.", "no_route", 404, response.status);
       }
       if (response.status >= 500) {
         return quoteError(`Le service Jupiter a répondu avec une erreur HTTP ${response.status}.`, "upstream", 502);
       }
-      return quoteError(`Jupiter a refusé la demande de cotation (HTTP ${response.status}). Vérifiez ses paramètres.`, "upstream", 502);
+      if (response.status === 400) {
+        const lowerError = upstreamError.toLowerCase();
+        const diagnostic = /referral|platform.?fee/i.test(upstreamError)
+          ? "Jupiter a rejeté les paramètres de parrainage ou de frais; vérifiez la configuration du compte referral."
+          : /mint|amount|slippage|taker|parameter|invalid|unsupported/i.test(lowerError)
+            ? "Jupiter a rejeté un paramètre de la demande; vérifiez les mints, le montant brut, le slippage et les paramètres requis."
+            : "Jupiter a rejeté la demande. Vérifiez les paramètres de cotation; le détail brut amont est masqué.";
+        return quoteError(`${diagnostic} (HTTP amont ${response.status}).`, "upstream", 502, response.status);
+      }
+      return quoteError(`Jupiter a refusé la demande de cotation (HTTP ${response.status}). Vérifiez ses paramètres.`, "upstream", 502, response.status);
     }
 
     const upstreamError = `${order.errorMessage ?? ""} ${order.error ?? ""}`.trim();
@@ -168,7 +177,9 @@ export async function POST(request: Request) {
       return quoteError("Jupiter n’a fourni aucune sortie cotable.", "no_route", 404);
     }
 
-    const routeCount = (order.routePlan ?? []).length || (order.router ? 1 : 0);
+    const routeLabels = (order.routePlan ?? [])
+      .map((step) => step.swapInfo?.label?.trim())
+      .filter((label): label is string => Boolean(label));
     const feeAmountRaw = order.platformFee?.amount ?? null;
     const feeMint = order.platformFee?.feeMint ?? order.feeMint ?? null;
     const feeDecimals = feeMint === inputMint
@@ -187,8 +198,8 @@ export async function POST(request: Request) {
         outputMint,
         inputDecimals,
         outputDecimals,
-        router: order.router ? "Route externe" : null,
-        route: Array.from({ length: routeCount }, () => "Route externe"),
+        router: order.router ?? null,
+        route: routeLabels.length > 0 ? routeLabels : [order.router ?? "Jupiter"],
         feeBps: typeof order.feeBps === "number" ? order.feeBps : null,
         feeAmountRaw,
         feeAmount:
@@ -198,10 +209,7 @@ export async function POST(request: Request) {
         feeMint,
         platformFeeBps: typeof order.platformFee?.feeBps === "number" ? order.platformFee.feeBps : null,
         referralFeeBpsRequested: params.has("referralFee") ? 50 : null,
-        referralConfirmed: Boolean(order.referralAccount && order.referralAccount === referralAccount),
-        referralNetBps: order.platformFee?.feeBps != null && order.referralAccount === referralAccount
-          ? Math.floor(order.platformFee.feeBps * 0.8)
-          : null,
+        referralAccountMatched: Boolean(order.referralAccount && order.referralAccount === referralAccount),
         poolFees: null,
         priceImpact: typeof order.priceImpact === "number" ? order.priceImpact : null,
         signatureFeeLamports:
