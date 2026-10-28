@@ -615,41 +615,69 @@ return {
       signal?: AbortSignal;
     }): Promise<JupiterQuoteResult> => {
       const amountInRaw = toRawAmount(amount, inputDecimals).toString();
-      const build = await requestJupiterBuild({
-        inputMint: fromMint.toBase58(),
-        outputMint: toMint.toBase58(),
-        amount: amountInRaw,
-        slippageBps,
+      const inputMint = fromMint.toBase58();
+      const outputMint = toMint.toBase58();
+      const response = await fetch("/api/jupiter/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputMint,
+          outputMint,
+          amount: amountInRaw,
+          inputDecimals,
+          outputDecimals,
+          slippageBps,
+        }),
+        cache: "no-store",
         signal,
       });
+      const result = await response.json() as Partial<JupiterQuoteResult> & { error?: unknown };
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === "string"
+            ? result.error
+            : "La cotation externe est indisponible."
+        );
+      }
+      if (
+        result.inputMint !== inputMint || result.outputMint !== outputMint ||
+        result.inputDecimals !== inputDecimals || result.outputDecimals !== outputDecimals ||
+        result.amountInRaw !== amountInRaw || typeof result.amountOutRaw !== "string" ||
+        !/^\d+$/.test(result.amountOutRaw) || BigInt(result.amountOutRaw) <= BigInt(0)
+      ) {
+        throw new Error("Réponse de cotation invalide : montant, mints ou décimales inattendus.");
+      }
+
       return {
-        amountIn: formatRawAmount(BigInt(build.inAmount), inputDecimals),
-        amountOut: formatRawAmount(BigInt(build.outAmount), outputDecimals),
-        amountInRaw: build.inAmount,
-        amountOutRaw: build.outAmount,
-        inputMint: build.inputMint,
-        outputMint: build.outputMint,
+        amountIn: formatRawAmount(BigInt(result.amountInRaw), inputDecimals),
+        amountOut: formatRawAmount(BigInt(result.amountOutRaw), outputDecimals),
+        amountInRaw: result.amountInRaw,
+        amountOutRaw: result.amountOutRaw,
+        inputMint,
+        outputMint,
         inputDecimals,
         outputDecimals,
-        router: "Route externe",
-        route: [],
-        feeBps: null,
-        feeAmountRaw: null,
-        feeAmount: null,
-        feeMint: build.feeMint,
-        feeAccount: build.feeAccount,
-        feeAccountIncludedInSwapInstruction: build.feeAccountIncludedInSwapInstruction,
-        platformFeeBps: build.platformFeeBps,
-        referralFeeBpsRequested: null,
-        referralAccountMatched: false,
+        router: typeof result.router === "string" ? result.router : null,
+        route: Array.isArray(result.route) ? result.route.filter((label): label is string => typeof label === "string") : [],
+        feeBps: typeof result.feeBps === "number" && Number.isFinite(result.feeBps) ? result.feeBps : null,
+        feeAmountRaw: typeof result.feeAmountRaw === "string" ? result.feeAmountRaw : null,
+        feeAmount: typeof result.feeAmount === "string" ? result.feeAmount : null,
+        feeMint: typeof result.feeMint === "string" ? result.feeMint : null,
+        // /quote does not prove the treasury account or the fee instruction;
+        // those are verified by /build immediately before signing.
+        feeAccount: null,
+        feeAccountIncludedInSwapInstruction: false,
+        platformFeeBps: null,
+        referralFeeBpsRequested: typeof result.referralFeeBpsRequested === "number" ? result.referralFeeBpsRequested : null,
+        referralAccountMatched: result.referralAccountMatched === true,
         poolFees: null,
-        priceImpact: null,
-        signatureFeeLamports: null,
-        prioritizationFeeLamports: null,
-        rentFeeLamports: null,
+        priceImpact: typeof result.priceImpact === "number" ? result.priceImpact : null,
+        signatureFeeLamports: typeof result.signatureFeeLamports === "number" ? result.signatureFeeLamports : null,
+        prioritizationFeeLamports: typeof result.prioritizationFeeLamports === "number" ? result.prioritizationFeeLamports : null,
+        rentFeeLamports: typeof result.rentFeeLamports === "number" ? result.rentFeeLamports : null,
       };
     },
-    [requestJupiterBuild]
+    []
   );
 
   const previewJupiterBuild = useCallback(

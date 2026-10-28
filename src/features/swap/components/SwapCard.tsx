@@ -684,7 +684,7 @@ export default function SwapCard() {
           {quoteMatchesInput && activeQuote && !quoteLoading && (
             <p className="mt-1 text-right text-[11px] text-zinc-500">
               {activeRoute === "jupiter"
-                ? "Estimation · route externe actualisée avant signature"
+                ? "Cotation indicative · ordre et frais revérifiés avant signature"
                 : currentZingQuote != null
                   ? "Estimation du pool ZingSwap"
                   : "Estimation indicative · aucun pool ZingSwap disponible"}
@@ -805,10 +805,10 @@ export default function SwapCard() {
             </span>
           </div>
 
-          {activeRoute === "jupiter" && displayJupiterQuote?.platformFeeBps != null && (
+          {activeRoute === "jupiter" && (
             <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
-              <span>Frais plateforme ZingSwap · prévisualisation</span>
-              <span>{(displayJupiterQuote.platformFeeBps / 100).toFixed(2)} % en SOL (WSOL) · destinataire {displayJupiterQuote.feeAccount?.slice(0, 6)}…{displayJupiterQuote.feeAccount?.slice(-4)}</span>
+              <span>Frais plateforme ZingSwap</span>
+              <span>Vérifiés par la préparation avant signature</span>
             </div>
           )}
 
@@ -867,7 +867,7 @@ export default function SwapCard() {
               : activeRoute === "jupiter" && !validJupiterQuote
                 ? "Swap indisponible : aucune cotation valide. L’action est désactivée."
                 : activeRoute === "jupiter"
-                ? "Le bouton prépare et simule une transaction de swap externe avec les frais ZingSwap avant de demander l’approbation du wallet."
+                ? "La cotation est indicative. Le bouton recalcule et simule l’ordre avec les frais ZingSwap avant de demander l’approbation du wallet."
                 : "Cotation indicative. Le swap sélectionné sera exécuté par le pool ZingSwap."}
           </p>
         )}
