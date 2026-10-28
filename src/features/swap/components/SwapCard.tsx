@@ -74,7 +74,7 @@ export default function SwapCard() {
   const { setVisible } = useWalletModal();
   const { connection } = useConnection();
   const { slippageBps } = useSettings();
-  const { swap, getQuote, getJupiterQuote, swapOnJupiter } = useSwap();
+  const { swap, getQuote, getJupiterQuote, swapJupiterBuild } = useSwap();
 
   const [fromBalance, setFromBalance] = useState("0.0000");
   const [toBalance, setToBalance] = useState("0.0000");
@@ -434,6 +434,10 @@ export default function SwapCard() {
     setMessage("");
 
     if (!connected) {
+      if (activeRoute === "jupiter") {
+        setMessage("Connecte d’abord ton wallet pour utiliser la route externe. Aucun wallet ne sera ouvert par cette action.");
+        return;
+      }
       setVisible(true);
       return;
     }
@@ -462,25 +466,19 @@ export default function SwapCard() {
 
     try {
       if (activeRoute === "jupiter") {
-        const result = await swapOnJupiter({
+        const result = await swapJupiterBuild({
           amount: fromAmount,
           fromMint: new PublicKey(fromToken.mint),
           toMint: new PublicKey(toToken.mint),
           slippageBps,
-          onOrderFeeStatus: (fee) => {
+          onReadyToSign: (build) => {
             setMessage(
-              `Contrôle de l’ordre — referralAccount attendu : correspondant ; referralFee demandé : ${(fee.requestedBps / 100).toFixed(2)} % ; feeBps total : ${fee.totalFeeBpsConfirmed ? `${fee.totalFeeBps} pb confirmé` : "preuve manquante"} ; feeMint : ${fee.feeMintPresent ? `${fee.feeMint?.slice(0, 4)}… présent` : "preuve manquante"} ; platformFee.amount : ${fee.platformFeeAmountPresent ? "présent" : "absent"}, ${fee.platformFeeAmountPositive ? "positif" : "non positif ou non prouvé"} ; platformFee.feeBps : ${fee.platformFeeBpsPresent ? `${fee.platformFeeBps} pb présent` : "absent"} ; initialisation on-chain et versement non vérifiés par /order.`
+              `Simulation réussie — route externe ; sortie estimée ${formatAtomicAmount(BigInt(build.outAmount), toToken.decimals)} ${toToken.symbol} ; frais ZingSwap : ${(build.platformFeeBps / 100).toFixed(2)} % en WSOL ; destinataire vérifié : ${build.feeAccount}. Vérifie les détails et confirme dans ton wallet pour signer et envoyer.`
             );
           },
         });
-
-        const observedFee = result.feeAmountObservedRaw === null
-          ? "déduction des frais non établie par les montants retournés"
-          : BigInt(result.feeAmountObservedRaw) > BigInt(0)
-            ? `déduction observée selon les écarts de montants Execute : ${result.feeAmountObservedRaw} unités brutes du mint ${result.feeMint?.slice(0, 4)}…`
-            : "aucune déduction positive observée dans les écarts Execute";
         setMessage(
-          `Swap confirmé 🎉 ${result.signature}. referralFee demandé : ${(result.requestedFeeBps / 100).toFixed(2)} % ; platformFee.amount positif confirmé dans l’ordre ; ${observedFee} ; versement au compte de trésorerie : ${result.treasuryPayoutVerified ? "vérifié" : "non vérifié par les données Execute"}.`
+          `Swap confirmé via la route externe ; signature ${result.signature} ; frais plateforme configurés à ${(result.platformFeeBps / 100).toFixed(2)} % en WSOL vers ${result.feeAccount}. Le montant exact des frais n’est pas fourni séparément.`
         );
         setFromAmount("");
         await refreshBalances();
@@ -686,7 +684,7 @@ export default function SwapCard() {
           {quoteMatchesInput && activeQuote && !quoteLoading && (
             <p className="mt-1 text-right text-[11px] text-zinc-500">
               {activeRoute === "jupiter"
-                ? "Estimation Jupiter · ordre actualisé avant signature"
+                ? "Estimation · route externe actualisée avant signature"
                 : currentZingQuote != null
                   ? "Estimation du pool ZingSwap"
                   : "Estimation indicative · aucun pool ZingSwap disponible"}
@@ -696,7 +694,7 @@ export default function SwapCard() {
 
         {/* ROUTE */}
         <p className="text-xs text-zinc-500">
-          Source de la sortie estimée : {activeQuote ? activeRoute === "jupiter" ? "Jupiter" : "Pool ZingSwap" : "Indisponible"}
+          Source de la sortie estimée : {activeQuote ? activeRoute === "jupiter" ? "Route externe" : "Pool ZingSwap" : "Indisponible"}
         </p>
         <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Route du swap">
           <button
@@ -789,9 +787,7 @@ export default function SwapCard() {
             <span>Route</span>
             <span className="text-right">
               {displayJupiterQuote
-                ? displayJupiterQuote.route.length > 0
-                  ? displayJupiterQuote.route.join(" → ")
-                  : displayJupiterQuote.router ?? "Jupiter"
+                ? "Agrégation externe"
                 : "Indisponible"}
             </span>
           </div>
@@ -809,10 +805,10 @@ export default function SwapCard() {
             </span>
           </div>
 
-          {activeRoute === "jupiter" && displayJupiterQuote?.referralFeeBpsRequested != null && (
+          {activeRoute === "jupiter" && displayJupiterQuote?.platformFeeBps != null && (
             <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
-              <span>Demande de frais d’intégrateur Jupiter (cotation)</span>
-              <span>{(displayJupiterQuote.referralFeeBpsRequested / 100).toFixed(2)} % · présence dans l’ordre contrôlée avant signature</span>
+              <span>Frais plateforme ZingSwap · prévisualisation</span>
+              <span>{(displayJupiterQuote.platformFeeBps / 100).toFixed(2)} % en SOL (WSOL) · destinataire {displayJupiterQuote.feeAccount?.slice(0, 6)}…{displayJupiterQuote.feeAccount?.slice(-4)}</span>
             </div>
           )}
 
@@ -830,7 +826,7 @@ export default function SwapCard() {
 
           {displayJupiterQuote && (
             <div className={`flex justify-between ${activeRoute === "jupiter" ? "text-cyan-300" : "text-zinc-400"}`}>
-              <span>{activeRoute === "jupiter" ? "Sortie estimée sélectionnée · Jupiter" : "Cotation Jupiter · comparaison uniquement, non exécutée"}</span>
+              <span>{activeRoute === "jupiter" ? "Sortie estimée sélectionnée · route externe" : "Cotation externe · comparaison uniquement, non exécutée"}</span>
               <span>{displayJupiterQuote.amountOut} {toToken.symbol}</span>
             </div>
           )}
@@ -844,7 +840,7 @@ export default function SwapCard() {
               </p>
               {quotesComparable && zingQuoteSnapshot && jupiterQuoteSnapshot && (
                 <>
-                  <p className="mt-1">Demandes à {formatQuoteTime(zingQuoteSnapshot.requestedAt)} ; réponses reçues à {formatQuoteTime(zingQuoteSnapshot.receivedAt)} (ZingSwap) et {formatQuoteTime(jupiterQuoteSnapshot.receivedAt)} (route choisie).</p>
+                  <p className="mt-1">Demandes à {formatQuoteTime(zingQuoteSnapshot.requestedAt)} ; réponses reçues à {formatQuoteTime(zingQuoteSnapshot.receivedAt)} (ZingSwap) et {formatQuoteTime(jupiterQuoteSnapshot.receivedAt)} (route externe).</p>
                   <details className="mt-1 text-left">
                     <summary className="cursor-pointer">Montants bruts et décimales</summary>
                     <p className="mt-1 break-all">Entrée {currentZingQuote.amountInRaw} ({currentZingQuote.inputDecimals} déc.) · sortie ZingSwap {currentZingQuote.amountOutRaw} ({currentZingQuote.outputDecimals} déc.) · sortie comparative {displayJupiterQuote.amountOutRaw} ({displayJupiterQuote.outputDecimals} déc.)</p>
@@ -871,7 +867,7 @@ export default function SwapCard() {
               : activeRoute === "jupiter" && !validJupiterQuote
                 ? "Swap indisponible : aucune cotation valide. L’action est désactivée."
                 : activeRoute === "jupiter"
-                ? "La transaction sera demandée puis signée par le portefeuille connecté avant son exécution."
+                ? "Le bouton prépare et simule une transaction de swap externe avec les frais ZingSwap avant de demander l’approbation du wallet."
                 : "Cotation indicative. Le swap sélectionné sera exécuté par le pool ZingSwap."}
           </p>
         )}
@@ -908,7 +904,7 @@ export default function SwapCard() {
           "
         >
           {loading
-            ? "Échange en cours…"
+            ? activeRoute === "jupiter" ? "Préparation / confirmation wallet…" : "Échange en cours…"
             : insufficientSol
               ? "Solde SOL insuffisant"
               : balanceUnavailable

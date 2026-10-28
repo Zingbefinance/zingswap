@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const maxDuration = 20;
+
 const JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order";
 const MINT_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -29,11 +31,43 @@ interface JupiterOrderResponse {
 
 type QuoteErrorType = "configuration" | "authentication" | "rate_limit" | "quota" | "no_route" | "upstream" | "network" | "invalid_request" | "invalid_response" | "cancelled";
 
-function quoteError(message: string, errorType: QuoteErrorType, status: number, upstreamStatus?: number) {
+function quoteError(
+  message: string,
+  errorType: QuoteErrorType,
+  status: number,
+  upstreamStatus?: number,
+  upstreamDetails?: { upstreamErrorCode?: number; upstreamMessage?: string }
+) {
   return NextResponse.json(
-    { error: message, errorType, ...(upstreamStatus ? { upstreamStatus } : {}) },
+    {
+      error: message,
+      errorType,
+      ...(upstreamStatus ? { upstreamStatus } : {}),
+      ...upstreamDetails,
+    },
     { status, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+function getSafeUpstreamDetails(order: JupiterOrderResponse) {
+  const rawMessage = typeof order.errorMessage === "string" && order.errorMessage.trim()
+    ? order.errorMessage
+    : typeof order.error === "string"
+      ? order.error
+      : "";
+  const upstreamMessage = rawMessage
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/(x-api-key|api[_-]?key|authorization|bearer)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+
+  return {
+    ...(typeof order.errorCode === "number" && Number.isFinite(order.errorCode)
+      ? { upstreamErrorCode: order.errorCode }
+      : {}),
+    ...(upstreamMessage ? { upstreamMessage } : {}),
+  };
 }
 
 function isNoRouteError(message: string) {
@@ -91,7 +125,7 @@ export async function POST(request: Request) {
     const response = await fetch(`${JUPITER_ORDER_URL}?${params}`, {
       headers: { "x-api-key": apiKey },
       cache: "no-store",
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
     });
 
     const responseText = await response.text();
@@ -129,7 +163,13 @@ export async function POST(request: Request) {
         return quoteError("Quota ou accès facturé Jupiter indisponible. Vérifiez l’offre et le quota de la clé.", "quota", 502);
       }
       if (/referral(?:account| token account).{0,100}(?:not initialized|initiali[sz]ation|does not exist)/i.test(upstreamError)) {
-        return quoteError("Jupiter a refusé la cotation : le compte de referral doit être initialisé ou corrigé. Vérifiez la configuration de parrainage.", "configuration", 502, response.status);
+        return quoteError(
+          "Jupiter a refusé la cotation : le compte de referral doit être initialisé ou corrigé. Vérifiez la configuration de parrainage.",
+          "configuration",
+          502,
+          response.status,
+          getSafeUpstreamDetails(order)
+        );
       }
       if (isNoRouteError(upstreamError)) {
         return quoteError("Aucune route externe disponible pour cette paire et ce montant.", "no_route", 404, response.status);
@@ -144,7 +184,13 @@ export async function POST(request: Request) {
           : /mint|amount|slippage|taker|parameter|invalid|unsupported/i.test(lowerError)
             ? "Jupiter a rejeté un paramètre de la demande; vérifiez les mints, le montant brut, le slippage et les paramètres requis."
             : "Jupiter a rejeté la demande. Vérifiez les paramètres de cotation; le détail brut amont est masqué.";
-        return quoteError(`${diagnostic} (HTTP amont ${response.status}).`, "upstream", 502, response.status);
+        return quoteError(
+          `${diagnostic} (HTTP amont ${response.status}).`,
+          "upstream",
+          502,
+          response.status,
+          getSafeUpstreamDetails(order)
+        );
       }
       return quoteError(`Jupiter a refusé la demande de cotation (HTTP ${response.status}). Vérifiez ses paramètres.`, "upstream", 502, response.status);
     }

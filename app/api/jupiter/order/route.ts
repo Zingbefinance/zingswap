@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  getAccount,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { RPC_ENDPOINT } from "../../../config/network";
 
 const JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order";
 const PUBLIC_KEY_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const REQUESTED_REFERRAL_FEE_BPS = 50;
-const JUPITER_REFERRAL_SHARE_PERCENT = 20;
-const EXPECTED_JUPITER_SHARE_BPS = REQUESTED_REFERRAL_FEE_BPS * JUPITER_REFERRAL_SHARE_PERCENT / 100;
+export const maxDuration = 30;
 
 interface JupiterOrder {
   transaction?: string | null;
@@ -23,7 +30,67 @@ interface JupiterOrder {
   error?: string;
 }
 
-function feeEvidence(order: JupiterOrder, configuredReferralAccount: string) {
+type ReferralTokenAccountCheck = {
+  verified: boolean;
+  reason: "verified" | "missing" | "invalid" | "rpc_unavailable";
+};
+
+async function verifyReferralTokenAccount(
+  referralAccount: string,
+  feeMint: string | undefined
+): Promise<ReferralTokenAccountCheck> {
+  if (!feeMint || !PUBLIC_KEY_PATTERN.test(feeMint)) {
+    return { verified: false, reason: "invalid" };
+  }
+
+  try {
+    const connection = new Connection(RPC_ENDPOINT, "confirmed");
+    const referral = new PublicKey(referralAccount);
+    const mint = new PublicKey(feeMint);
+    const mintAccount = await connection.getAccountInfo(mint, "confirmed");
+    if (!mintAccount) return { verified: false, reason: "invalid" };
+
+    const tokenProgram = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].find((program) =>
+      program.equals(mintAccount.owner)
+    );
+    if (!tokenProgram) return { verified: false, reason: "invalid" };
+
+    // This is the referralTokenAccount address derived by Jupiter's Referral SDK.
+    const referralTokenAccount = getAssociatedTokenAddressSync(
+      mint,
+      referral,
+      true,
+      tokenProgram
+    );
+    const tokenAccount = await getAccount(
+      connection,
+      referralTokenAccount,
+      "confirmed",
+      tokenProgram
+    );
+    const verified = tokenAccount.isInitialized && !tokenAccount.isFrozen &&
+      tokenAccount.owner.equals(referral) && tokenAccount.mint.equals(mint);
+
+    return { verified, reason: verified ? "verified" : "invalid" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    const errorName = error instanceof Error ? error.name.toLowerCase() : "";
+    if (
+      errorName === "tokenaccountnotfounderror" ||
+      message.includes("could not find account") ||
+      message.includes("account does not exist")
+    ) {
+      return { verified: false, reason: "missing" };
+    }
+    return { verified: false, reason: "rpc_unavailable" };
+  }
+}
+
+function feeEvidence(
+  order: JupiterOrder,
+  configuredReferralAccount: string,
+  referralDestinationVerified: boolean
+) {
   const feeAmount = order.platformFee?.amount;
   const platformFeeBps = order.platformFee?.feeBps;
   const feeMint = order.feeMint;
@@ -34,14 +101,18 @@ function feeEvidence(order: JupiterOrder, configuredReferralAccount: string) {
   const platformFeeAmountPresent = typeof feeAmount === "string" && /^\d+$/.test(feeAmount);
   const platformFeeAmountPositive = platformFeeAmountPresent && BigInt(feeAmount) > BigInt(0);
   const platformFeeBpsPresent = typeof platformFeeBps === "number" && Number.isFinite(platformFeeBps);
-  const platformFeeBpsConfirmed = platformFeeBps === EXPECTED_JUPITER_SHARE_BPS;
-
+  // Jupiter documents no separate platform fee when Referral is active. A
+  // positive platformFee.feeBps indicates the default platform-fee fallback.
+  const platformFeeFallbackDetected = platformFeeAmountPositive ||
+    (platformFeeBpsPresent && platformFeeBps > 0);
   return {
     presentInOrder: Boolean(
       configuredReferralAccount && referralAccountMatched && totalFeeBpsConfirmed && feeMintPresent &&
-      platformFeeAmountPresent && platformFeeAmountPositive && platformFeeBpsConfirmed
+      !platformFeeFallbackDetected &&
+      referralDestinationVerified
     ),
     referralAccountMatched,
+    referralDestinationVerified,
     totalFeeBps: typeof totalFeeBps === "number" && Number.isFinite(totalFeeBps) ? totalFeeBps : null,
     totalFeeBpsConfirmed,
     feeMint: feeMintPresent ? feeMint : null,
@@ -50,6 +121,7 @@ function feeEvidence(order: JupiterOrder, configuredReferralAccount: string) {
     platformFeeAmountPositive,
     platformFeeBps: platformFeeBpsPresent ? platformFeeBps : null,
     platformFeeBpsPresent,
+    platformFeeFallbackDetected,
   };
 }
 
@@ -110,12 +182,55 @@ export async function POST(request: Request) {
       );
     }
 
-    const feeEvidenceInOrder = feeEvidence(order, referralAccount);
+    const referralTokenAccountCheck = await verifyReferralTokenAccount(referralAccount, order.feeMint);
+    const feeEvidenceInOrder = feeEvidence(
+      order,
+      referralAccount,
+      referralTokenAccountCheck.verified
+    );
 
-    // Do not turn an order without a signable transaction into an executable order.
+    if (!feeEvidenceInOrder.presentInOrder) {
+      const refusalReasons = [
+        !feeEvidenceInOrder.referralAccountMatched && "referralAccount absent ou différent du compte configuré",
+        !feeEvidenceInOrder.totalFeeBpsConfirmed && `feeBps total absent ou inférieur aux 50 pb demandés (${feeEvidenceInOrder.totalFeeBps ?? "absent"} pb reçu)`,
+        !feeEvidenceInOrder.feeMintPresent && "feeMint absent ou invalide",
+        feeEvidenceInOrder.platformFeeFallbackDetected && `frais plateforme de repli détectés${feeEvidenceInOrder.platformFeeBpsPresent ? ` (${feeEvidenceInOrder.platformFeeBps} pb)` : ""} malgré les paramètres Referral`,
+        referralTokenAccountCheck.reason === "missing" && "le referralTokenAccount associé au feeMint n’est pas initialisé",
+        referralTokenAccountCheck.reason === "invalid" && "le referralTokenAccount associé au feeMint est invalide ou ne correspond pas au compte Referral configuré",
+        referralTokenAccountCheck.reason === "rpc_unavailable" && "impossible de vérifier le referralTokenAccount sur Solana; ordre bloqué par sécurité",
+      ].filter((reason): reason is string => Boolean(reason));
+
+      // Do not forward a transaction when fee evidence is incomplete. Omitting
+      // this property avoids presenting a locally fabricated null as Jupiter's value.
+      return NextResponse.json(
+        {
+          error: `Ordre refusé avant signature : ${refusalReasons.join(" ; ")}.`,
+          refusalReasons,
+          treasuryFee: {
+            requestedBps: REQUESTED_REFERRAL_FEE_BPS,
+            referralAccountMatched: feeEvidenceInOrder.referralAccountMatched,
+            referralDestinationVerified: feeEvidenceInOrder.referralDestinationVerified,
+            referralTokenAccountStatus: referralTokenAccountCheck.reason,
+            totalFeeBps: feeEvidenceInOrder.totalFeeBps,
+            totalFeeBpsConfirmed: feeEvidenceInOrder.totalFeeBpsConfirmed,
+            feeMint: feeEvidenceInOrder.feeMint,
+            feeMintPresent: feeEvidenceInOrder.feeMintPresent,
+            platformFeeAmountPresent: feeEvidenceInOrder.platformFeeAmountPresent,
+            platformFeeAmountPositive: feeEvidenceInOrder.platformFeeAmountPositive,
+            platformFeeBps: feeEvidenceInOrder.platformFeeBps,
+            platformFeeBpsPresent: feeEvidenceInOrder.platformFeeBpsPresent,
+            platformFeeFallbackDetected: feeEvidenceInOrder.platformFeeFallbackDetected,
+            presentInOrder: false,
+          },
+        },
+        { status: 502, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    // Preserve Jupiter's transaction field as returned; do not synthesize null.
     return NextResponse.json(
       {
-        transaction: feeEvidenceInOrder.presentInOrder ? order.transaction ?? null : null,
+        transaction: order.transaction,
         requestId: order.requestId ?? null,
         inAmount: order.inAmount ?? null,
         outAmount: order.outAmount ?? null,
@@ -123,6 +238,8 @@ export async function POST(request: Request) {
         treasuryFee: {
           requestedBps: REQUESTED_REFERRAL_FEE_BPS,
           referralAccountMatched: feeEvidenceInOrder.referralAccountMatched,
+          referralDestinationVerified: feeEvidenceInOrder.referralDestinationVerified,
+          referralTokenAccountStatus: referralTokenAccountCheck.reason,
           totalFeeBps: feeEvidenceInOrder.totalFeeBps,
           totalFeeBpsConfirmed: feeEvidenceInOrder.totalFeeBpsConfirmed,
           feeMint: feeEvidenceInOrder.feeMint,
@@ -131,7 +248,7 @@ export async function POST(request: Request) {
           platformFeeAmountPositive: feeEvidenceInOrder.platformFeeAmountPositive,
           platformFeeBps: feeEvidenceInOrder.platformFeeBps,
           platformFeeBpsPresent: feeEvidenceInOrder.platformFeeBpsPresent,
-          expectedJupiterShareBps: EXPECTED_JUPITER_SHARE_BPS,
+          platformFeeFallbackDetected: feeEvidenceInOrder.platformFeeFallbackDetected,
           presentInOrder: feeEvidenceInOrder.presentInOrder,
         },
         lastValidBlockHeight: order.lastValidBlockHeight ?? null,

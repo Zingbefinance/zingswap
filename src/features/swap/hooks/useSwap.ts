@@ -14,9 +14,13 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import {
+  AddressLookupTableAccount,
+  ComputeBudgetProgram,
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
+  TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import {
@@ -81,6 +85,8 @@ export interface JupiterQuoteResult {
   feeAmountRaw: string | null;
   feeAmount: string | null;
   feeMint: string | null;
+  feeAccount: string | null;
+  feeAccountIncludedInSwapInstruction: boolean;
   platformFeeBps: number | null;
   referralFeeBpsRequested: number | null;
   referralAccountMatched: boolean;
@@ -89,6 +95,36 @@ export interface JupiterQuoteResult {
   signatureFeeLamports: number | null;
   prioritizationFeeLamports: number | null;
   rentFeeLamports: number | null;
+}
+
+interface JupiterBuildPreview {
+  previewOnly: true;
+  signed: false;
+  submitted: false;
+  platformFeeBps: number;
+  feeMint: string;
+  feeAccount: string;
+  feeAccountIncludedInSwapInstruction: true;
+  inputMint: string;
+  outputMint: string;
+  inAmount: string;
+  outAmount: string;
+  otherAmountThreshold: string | null;
+  routePlan: Array<{ swapInfo?: { label?: string } }>;
+  computeBudgetInstructions: JupiterBuildInstruction[];
+  setupInstructions: JupiterBuildInstruction[];
+  swapInstruction: JupiterBuildInstruction;
+  cleanupInstruction: JupiterBuildInstruction | null;
+  otherInstructions: JupiterBuildInstruction[];
+  tipInstruction: JupiterBuildInstruction | null;
+  addressesByLookupTableAddress: Record<string, string[]> | null;
+  blockhashWithMetadata: { blockhash: number[]; lastValidBlockHeight: number };
+}
+
+interface JupiterBuildInstruction {
+  programId: string;
+  accounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>;
+  data: string;
 }
 
 interface JupiterOrderResult {
@@ -105,6 +141,8 @@ interface JupiterOrderResult {
     requestedBps: number;
     presentInOrder: boolean;
     referralAccountMatched: boolean;
+    referralDestinationVerified: boolean;
+    referralTokenAccountStatus: "verified" | "missing" | "invalid" | "rpc_unavailable";
     totalFeeBps: number | null;
     totalFeeBpsConfirmed: boolean;
     feeMintPresent: boolean;
@@ -112,7 +150,7 @@ interface JupiterOrderResult {
     platformFeeAmountPositive: boolean;
     platformFeeBps: number | null;
     platformFeeBpsPresent: boolean;
-    expectedJupiterShareBps: number;
+    platformFeeFallbackDetected: boolean;
     feeMint: string | null;
   };
 }
@@ -420,6 +458,56 @@ return {
     [connection]
   );
 
+  const requestJupiterBuild = useCallback(
+    async ({
+      inputMint,
+      outputMint,
+      amount,
+      slippageBps: requestedSlippageBps,
+      signal,
+    }: {
+      inputMint: string;
+      outputMint: string;
+      amount: string;
+      slippageBps: number;
+      signal?: AbortSignal;
+    }): Promise<JupiterBuildPreview> => {
+      if (!publicKey) {
+        throw new Error("Connecte un wallet pour prévisualiser la route externe.");
+      }
+
+      const response = await fetch("/api/jupiter/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputMint,
+          outputMint,
+          amount,
+          taker: publicKey.toBase58(),
+          slippageBps: requestedSlippageBps,
+        }),
+        cache: "no-store",
+        signal,
+      });
+      const result = await response.json() as JupiterBuildPreview & { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "La prévisualisation de la route externe est indisponible.");
+      }
+      if (
+        result.previewOnly !== true || result.signed !== false || result.submitted !== false ||
+        result.inputMint !== inputMint || result.outputMint !== outputMint ||
+        result.inAmount !== amount || !/^\d+$/.test(result.outAmount) ||
+        !Number.isFinite(result.platformFeeBps) || result.platformFeeBps <= 0 ||
+        !result.feeAccount || result.feeMint !== WSOL_MINT.toBase58() ||
+        result.feeAccountIncludedInSwapInstruction !== true
+      ) {
+        throw new Error("Prévisualisation refusée : les paramètres ou la destination des frais ne sont pas confirmés.");
+      }
+      return result;
+    },
+    [publicKey]
+  );
+
   const getJupiterQuote = useCallback(
     async ({
       amount,
@@ -439,33 +527,221 @@ return {
       signal?: AbortSignal;
     }): Promise<JupiterQuoteResult> => {
       const amountInRaw = toRawAmount(amount, inputDecimals).toString();
-      const response = await fetch("/api/jupiter/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inputMint: fromMint.toBase58(),
-          outputMint: toMint.toBase58(),
-          amount: amountInRaw,
-          inputDecimals,
-          outputDecimals,
-          slippageBps,
-        }),
-        cache: "no-store",
+      const build = await requestJupiterBuild({
+        inputMint: fromMint.toBase58(),
+        outputMint: toMint.toBase58(),
+        amount: amountInRaw,
+        slippageBps,
         signal,
       });
+      return {
+        amountIn: formatRawAmount(BigInt(build.inAmount), inputDecimals),
+        amountOut: formatRawAmount(BigInt(build.outAmount), outputDecimals),
+        amountInRaw: build.inAmount,
+        amountOutRaw: build.outAmount,
+        inputMint: build.inputMint,
+        outputMint: build.outputMint,
+        inputDecimals,
+        outputDecimals,
+        router: "Route externe",
+        route: [],
+        feeBps: null,
+        feeAmountRaw: null,
+        feeAmount: null,
+        feeMint: build.feeMint,
+        feeAccount: build.feeAccount,
+        feeAccountIncludedInSwapInstruction: build.feeAccountIncludedInSwapInstruction,
+        platformFeeBps: build.platformFeeBps,
+        referralFeeBpsRequested: null,
+        referralAccountMatched: false,
+        poolFees: null,
+        priceImpact: null,
+        signatureFeeLamports: null,
+        prioritizationFeeLamports: null,
+        rentFeeLamports: null,
+      };
+    },
+    [requestJupiterBuild]
+  );
 
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          typeof result.error === "string"
-            ? result.error
-            : "La cotation externe est indisponible."
-        );
+  const previewJupiterBuild = useCallback(
+    async ({
+      amount,
+      fromMint,
+      toMint,
+      slippageBps: requestedSlippageBps,
+    }: {
+      amount: string;
+      fromMint: PublicKey;
+      toMint: PublicKey;
+      slippageBps: number;
+    }): Promise<JupiterBuildPreview> => {
+      const inputToken = await getTokenByMint(fromMint.toBase58());
+      if (!inputToken) throw new Error("Métadonnées du token d’entrée indisponibles.");
+      const amountRaw = toRawAmount(amount, inputToken.decimals).toString();
+      return requestJupiterBuild({
+        inputMint: fromMint.toBase58(),
+        outputMint: toMint.toBase58(),
+        amount: amountRaw,
+        slippageBps: requestedSlippageBps,
+      });
+    },
+    [requestJupiterBuild]
+  );
+
+  const swapJupiterBuild = useCallback(
+    async ({
+      amount,
+      fromMint,
+      toMint,
+      slippageBps: requestedSlippageBps,
+      onReadyToSign,
+    }: {
+      amount: string;
+      fromMint: PublicKey;
+      toMint: PublicKey;
+      slippageBps: number;
+      onReadyToSign?: (build: JupiterBuildPreview) => void;
+    }): Promise<{ signature: string; amountOut: string; feeAccount: string; platformFeeBps: number }> => {
+      if (!connected || !publicKey || !signTransaction) {
+        throw new Error("Connecte un portefeuille capable de signer les transactions.");
       }
 
-      return result as JupiterQuoteResult;
+      const inputToken = await getTokenByMint(fromMint.toBase58());
+      if (!inputToken) throw new Error("Métadonnées du token d’entrée indisponibles.");
+      const amountRaw = toRawAmount(amount, inputToken.decimals).toString();
+      const build = await requestJupiterBuild({
+        inputMint: fromMint.toBase58(),
+        outputMint: toMint.toBase58(),
+        amount: amountRaw,
+        slippageBps: requestedSlippageBps,
+      });
+      const toInstruction = (ix: JupiterBuildInstruction) => new TransactionInstruction({
+        programId: new PublicKey(ix.programId),
+        keys: ix.accounts.map((account) => ({
+          pubkey: new PublicKey(account.pubkey),
+          isSigner: account.isSigner,
+          isWritable: account.isWritable,
+        })),
+        data: Buffer.from(ix.data, "base64"),
+      });
+
+      const lastValidBlockHeight = build.blockhashWithMetadata.lastValidBlockHeight;
+      const blockhashBytes = build.blockhashWithMetadata.blockhash;
+      if (
+        !Array.isArray(blockhashBytes) || blockhashBytes.length !== 32 ||
+        blockhashBytes.some((byte) => !Number.isInteger(byte) || byte < 0 || byte > 255) ||
+        !Number.isSafeInteger(lastValidBlockHeight) || lastValidBlockHeight <= 0
+      ) {
+        throw new Error("La route externe a retourné un blockhash ou une expiration invalide.");
+      }
+      const recentBlockhash = new PublicKey(Uint8Array.from(blockhashBytes)).toBase58();
+      const currentBlockHeight = await connection.getBlockHeight("confirmed");
+      if (currentBlockHeight > lastValidBlockHeight) {
+        throw new Error("Le blockhash de la route externe a expiré. Demande une nouvelle cotation.");
+      }
+
+      const lookupTables = Object.entries(build.addressesByLookupTableAddress ?? {}).map(
+        ([key, addresses]) => new AddressLookupTableAccount({
+          key: new PublicKey(key),
+          state: {
+            deactivationSlot: BigInt("18446744073709551615"),
+            lastExtendedSlot: 0,
+            lastExtendedSlotStartIndex: 0,
+            addresses: addresses.map((address) => new PublicKey(address)),
+          },
+        })
+      );
+      const swapInstructions = [
+        ...build.setupInstructions.map(toInstruction),
+        toInstruction(build.swapInstruction),
+        ...(build.cleanupInstruction ? [toInstruction(build.cleanupInstruction)] : []),
+        ...build.otherInstructions.map(toInstruction),
+        ...(build.tipInstruction ? [toInstruction(build.tipInstruction)] : []),
+      ];
+      const feeAccount = new PublicKey(build.feeAccount);
+      if (!swapInstructions.some((instruction) =>
+        instruction.keys.some((account) => account.pubkey.equals(feeAccount))
+      )) {
+        throw new Error("Refus avant signature : l’ATA WSOL de la trésorerie manque dans les instructions.");
+      }
+
+      const compileTransaction = (instructions: TransactionInstruction[]) => new VersionedTransaction(
+        new TransactionMessage({
+          payerKey: publicKey,
+          recentBlockhash,
+          instructions,
+        }).compileToV0Message(lookupTables)
+      );
+      const maxComputeUnits = 1_400_000;
+      const simulationTx = compileTransaction([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: maxComputeUnits }),
+        ...build.computeBudgetInstructions.map(toInstruction),
+        ...swapInstructions,
+      ]);
+      const simulation = await connection.simulateTransaction(simulationTx, {
+        commitment: "confirmed",
+        replaceRecentBlockhash: true,
+        sigVerify: false,
+      });
+      if (simulation.value.err) {
+        throw new Error("Simulation refusée avant signature. Vérifie le solde, la route et les comptes requis.");
+      }
+      if (simulation.value.unitsConsumed == null || simulation.value.unitsConsumed > maxComputeUnits) {
+        throw new Error("La simulation n’a pas fourni une consommation de calcul valide.");
+      }
+
+      const computeUnitLimit = Math.min(
+        Math.ceil(simulation.value.unitsConsumed * 1.2),
+        maxComputeUnits
+      );
+      const transaction = compileTransaction([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnitLimit }),
+        ...build.computeBudgetInstructions.map(toInstruction),
+        ...swapInstructions,
+      ]);
+      const requiredSignerCount = transaction.message.header.numRequiredSignatures;
+      const takerSignerIndex = transaction.message.staticAccountKeys
+        .slice(0, requiredSignerCount)
+        .findIndex((key) => key.equals(publicKey));
+      if (takerSignerIndex < 0) {
+        throw new Error("Refus avant signature : la transaction ne requiert pas la signature du wallet connecté.");
+      }
+
+      onReadyToSign?.(build);
+      const signedTransaction = await signTransaction(transaction);
+      if (!Buffer.from(signedTransaction.message.serialize()).equals(Buffer.from(transaction.message.serialize()))) {
+        throw new Error("Le wallet a modifié le contenu de la transaction ; envoi bloqué.");
+      }
+      if (!signedTransaction.signatures[takerSignerIndex]?.some((byte) => byte !== 0)) {
+        throw new Error("Le wallet n’a pas signé la transaction.");
+      }
+
+      const heightBeforeSend = await connection.getBlockHeight("confirmed");
+      if (heightBeforeSend > lastValidBlockHeight) {
+        throw new Error("La transaction a expiré avant l’envoi. Demande une nouvelle cotation.");
+      }
+      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        maxRetries: 3,
+        preflightCommitment: "confirmed",
+      });
+      const confirmation = await connection.confirmTransaction({
+        signature,
+        blockhash: recentBlockhash,
+        lastValidBlockHeight,
+      }, "confirmed");
+      if (confirmation.value.err) {
+        throw new Error(`La transaction Jupiter a échoué sur Solana (${signature}).`);
+      }
+
+      return {
+        signature,
+        amountOut: build.outAmount,
+        feeAccount: build.feeAccount,
+        platformFeeBps: build.platformFeeBps,
+      };
     },
-    []
+    [connected, connection, publicKey, requestJupiterBuild, signTransaction]
   );
 
   const swapOnJupiter = useCallback(
@@ -521,10 +797,8 @@ return {
         !order.treasuryFee?.presentInOrder ||
         order.treasuryFee.requestedBps !== 50 ||
         !order.treasuryFee.totalFeeBpsConfirmed ||
-        !order.treasuryFee.platformFeeBpsPresent ||
-        order.treasuryFee.platformFeeBps !== order.treasuryFee.expectedJupiterShareBps ||
-        !order.treasuryFee.platformFeeAmountPresent ||
-        !order.treasuryFee.platformFeeAmountPositive ||
+        !order.treasuryFee.referralDestinationVerified ||
+        order.treasuryFee.platformFeeFallbackDetected ||
         !order.treasuryFee.feeMintPresent
       ) {
         const feeChecks = order.treasuryFee;
@@ -533,13 +807,11 @@ return {
           feeChecks?.requestedBps !== 50 && "la demande de frais ne correspond pas à 0,50 %",
           !feeChecks?.totalFeeBpsConfirmed && `feeBps total absent ou inférieur aux 50 pb demandés (${feeChecks?.totalFeeBps ?? "absent"} pb reçu)`,
           !feeChecks?.feeMintPresent && "feeMint absent ou invalide",
-          !feeChecks?.platformFeeAmountPresent && "platformFee.amount absent ou invalide",
-          feeChecks?.platformFeeAmountPresent && !feeChecks.platformFeeAmountPositive && "platformFee.amount n’est pas positif",
-          !feeChecks?.platformFeeBpsPresent && "platformFee.feeBps absent ou invalide",
-          feeChecks?.platformFeeBpsPresent && feeChecks.platformFeeBps !== feeChecks.expectedJupiterShareBps && `platformFee.feeBps vaut ${feeChecks.platformFeeBps} pb; la part plateforme attendue d’après le partage documenté est ${feeChecks.expectedJupiterShareBps} pb`,
+          !feeChecks?.referralDestinationVerified && `referralTokenAccount non vérifié (${feeChecks?.referralTokenAccountStatus ?? "état inconnu"})`,
+          feeChecks?.platformFeeFallbackDetected && `platformFee.feeBps vaut ${feeChecks.platformFeeBps} pb : frais plateforme de repli détectés`,
           feeChecks != null && !feeChecks.presentInOrder && "les champs de frais de l’ordre ne satisfont pas le contrôle complet",
         ].filter((reason): reason is string => Boolean(reason));
-        throw new Error(`Refus avant signature : ${reasons.join(" ; ")}. /order ne vérifie pas l’initialisation on-chain du referralTokenAccount ni le versement effectif; aucune transaction n’a été signée ni envoyée.`);
+        throw new Error(`Refus avant signature : ${reasons.join(" ; ")}. La route vérifie l'ATA du feeMint sur Solana, mais pas le versement effectif; aucune transaction n’a été signée ni envoyée.`);
       }
       onOrderFeeStatus?.(order.treasuryFee);
 
@@ -630,7 +902,7 @@ return {
 
       const confirmation = await connection.confirmTransaction(result.signature, "confirmed");
       if (confirmation.value.err) {
-        throw new Error("La transaction Jupiter a été incluse mais a échoué sur le réseau.");
+        throw new Error("La transaction de swap a été incluse mais a échoué sur le réseau.");
       }
 
       const rawAmount = (value: string | null) => value && /^\d+$/.test(value) ? BigInt(value) : null;
@@ -1199,6 +1471,8 @@ lastValidBlockHeight:
     swap,
     getQuote,
     getJupiterQuote,
+    previewJupiterBuild,
+    swapJupiterBuild,
     swapOnJupiter,
     connected,
     publicKey,
