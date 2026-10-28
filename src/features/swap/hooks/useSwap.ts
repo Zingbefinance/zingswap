@@ -176,10 +176,16 @@ function getVersionedMessageChanges(
   return changes;
 }
 
+interface VersionedMessageSemantics {
+  feePayer: string | null;
+  accountRoles: string;
+  instructions: Array<{ program: string; accounts: string[]; data: string }>;
+}
+
 function getVersionedMessageSemantics(
   message: VersionedTransaction["message"],
   lookupTables: AddressLookupTableAccount[]
-): string {
+): VersionedMessageSemantics {
   const resolvedKeys = message.getAccountKeys({ addressLookupTableAccounts: lookupTables });
   const [staticKeys, writableLookupKeys = [], readonlyLookupKeys = []] = resolvedKeys.keySegments();
   const roles = new Map<string, { signer: boolean; writable: boolean }>();
@@ -204,15 +210,37 @@ function getVersionedMessageSemantics(
     return key.toBase58();
   };
 
-  return JSON.stringify({
+  return {
     feePayer: staticKeys[0]?.toBase58() ?? null,
-    roles: Array.from(roles.entries()).sort(([left], [right]) => left.localeCompare(right)),
+    accountRoles: JSON.stringify(Array.from(roles.entries()).sort(([left], [right]) => left.localeCompare(right))),
     instructions: message.compiledInstructions.map((instruction) => ({
       program: keyAt(instruction.programIdIndex),
       accounts: instruction.accountKeyIndexes.map(keyAt),
       data: Buffer.from(instruction.data).toString("base64"),
     })),
-  });
+  };
+}
+
+function getSemanticMessageChanges(
+  before: VersionedMessageSemantics,
+  after: VersionedMessageSemantics
+): string[] {
+  const changes: string[] = [];
+  if (before.feePayer !== after.feePayer) changes.push("payeur de frais");
+  if (before.accountRoles !== after.accountRoles) changes.push("comptes ou permissions signer/écriture");
+  if (before.instructions.length !== after.instructions.length) changes.push("nombre d’instructions");
+
+  const instructionCount = Math.min(before.instructions.length, after.instructions.length);
+  for (let index = 0; index < instructionCount; index += 1) {
+    const original = before.instructions[index];
+    const signed = after.instructions[index];
+    if (original.program !== signed.program) changes.push("programme de l’instruction " + (index + 1));
+    if (JSON.stringify(original.accounts) !== JSON.stringify(signed.accounts)) {
+      changes.push("comptes de l’instruction " + (index + 1));
+    }
+    if (original.data !== signed.data) changes.push("données de l’instruction " + (index + 1));
+  }
+  return changes;
 }
 
 interface JupiterOrderResult {
@@ -800,16 +828,21 @@ return {
       const signedTransaction = await signTransaction(transaction);
       const changedFields = getVersionedMessageChanges(transaction.message, signedTransaction.message);
       const walletRefreshedBlockhash = transaction.message.recentBlockhash !== signedTransaction.message.recentBlockhash;
-      let sameTransactionSemantics = false;
+      let originalSemantics: VersionedMessageSemantics;
+      let signedSemantics: VersionedMessageSemantics;
       try {
-        sameTransactionSemantics = getVersionedMessageSemantics(transaction.message, lookupTables) ===
-          getVersionedMessageSemantics(signedTransaction.message, lookupTables);
+        originalSemantics = getVersionedMessageSemantics(transaction.message, lookupTables);
+        signedSemantics = getVersionedMessageSemantics(signedTransaction.message, lookupTables);
       } catch {
-        sameTransactionSemantics = false;
-      }
-      if (!sameTransactionSemantics) {
         throw new Error(
-          `Le wallet a modifié le message de transaction (${changedFields.join(", ") || "structure du message"}) ; envoi bloqué.`
+          "Le wallet a renvoyé un message dont les tables de lookup d’adresses ne peuvent pas être vérifiées (" +
+          (changedFields.join(", ") || "structure du message") + ") ; envoi bloqué."
+        );
+      }
+      const semanticChanges = getSemanticMessageChanges(originalSemantics, signedSemantics);
+      if (semanticChanges.length > 0) {
+        throw new Error(
+          "Le wallet a modifié le sens de la transaction (" + semanticChanges.join(", ") + ") ; envoi bloqué."
         );
       }
 
