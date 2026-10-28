@@ -127,6 +127,55 @@ interface JupiterBuildInstruction {
   data: string;
 }
 
+function getVersionedMessageChanges(
+  before: VersionedTransaction["message"],
+  after: VersionedTransaction["message"]
+): string[] {
+  const changes: string[] = [];
+  const beforeHeader = before.header;
+  const afterHeader = after.header;
+  if (
+    beforeHeader.numRequiredSignatures !== afterHeader.numRequiredSignatures ||
+    beforeHeader.numReadonlySignedAccounts !== afterHeader.numReadonlySignedAccounts ||
+    beforeHeader.numReadonlyUnsignedAccounts !== afterHeader.numReadonlyUnsignedAccounts
+  ) {
+    changes.push("autorisations et comptes signataires");
+  }
+  if (before.recentBlockhash !== after.recentBlockhash) {
+    changes.push("blockhash");
+  }
+  if (
+    before.staticAccountKeys.map((key) => key.toBase58()).join(",") !==
+    after.staticAccountKeys.map((key) => key.toBase58()).join(",")
+  ) {
+    changes.push("liste des comptes");
+  }
+
+  const instructions = (message: typeof before) => JSON.stringify(
+    message.compiledInstructions.map((instruction) => ({
+      programIdIndex: instruction.programIdIndex,
+      accountKeyIndexes: instruction.accountKeyIndexes,
+      data: Array.from(instruction.data),
+    }))
+  );
+  if (instructions(before) !== instructions(after)) {
+    changes.push("instructions (programme, comptes ou données)");
+  }
+
+  const lookups = (message: typeof before) => JSON.stringify(
+    message.addressTableLookups.map((lookup) => ({
+      accountKey: lookup.accountKey.toBase58(),
+      writableIndexes: lookup.writableIndexes,
+      readonlyIndexes: lookup.readonlyIndexes,
+    }))
+  );
+  if (lookups(before) !== lookups(after)) {
+    changes.push("tables de lookup d’adresses");
+  }
+
+  return changes;
+}
+
 interface JupiterOrderResult {
   transaction: string | null;
   requestId: string | null;
@@ -710,26 +759,46 @@ return {
 
       onReadyToSign?.(build);
       const signedTransaction = await signTransaction(transaction);
-      if (!Buffer.from(signedTransaction.message.serialize()).equals(Buffer.from(transaction.message.serialize()))) {
-        throw new Error("Le wallet a modifié le contenu de la transaction ; envoi bloqué.");
+      const changedFields = getVersionedMessageChanges(transaction.message, signedTransaction.message);
+      const walletRefreshedBlockhash =
+        changedFields.length === 1 && changedFields[0] === "blockhash";
+      if (
+        changedFields.length > 0 &&
+        !walletRefreshedBlockhash
+      ) {
+        throw new Error(
+          `Le wallet a modifié le message de transaction (${changedFields.join(", ") || "structure du message"}) ; envoi bloqué.`
+        );
       }
       if (!signedTransaction.signatures[takerSignerIndex]?.some((byte) => byte !== 0)) {
         throw new Error("Le wallet n’a pas signé la transaction.");
       }
 
-      const heightBeforeSend = await connection.getBlockHeight("confirmed");
-      if (heightBeforeSend > lastValidBlockHeight) {
-        throw new Error("La transaction a expiré avant l’envoi. Demande une nouvelle cotation.");
+      if (walletRefreshedBlockhash) {
+        const refreshedBlockhashStatus = await connection.isBlockhashValid(
+          signedTransaction.message.recentBlockhash,
+          { commitment: "confirmed" }
+        );
+        if (!refreshedBlockhashStatus.value) {
+          throw new Error("Le blockhash actualisé par le wallet n’est pas valide ; envoi bloqué.");
+        }
+      } else {
+        const heightBeforeSend = await connection.getBlockHeight("confirmed");
+        if (heightBeforeSend > lastValidBlockHeight) {
+          throw new Error("La transaction a expiré avant l’envoi. Demande une nouvelle cotation.");
+        }
       }
       const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
         maxRetries: 3,
         preflightCommitment: "confirmed",
       });
-      const confirmation = await connection.confirmTransaction({
-        signature,
-        blockhash: recentBlockhash,
-        lastValidBlockHeight,
-      }, "confirmed");
+      const confirmation = walletRefreshedBlockhash
+        ? await connection.confirmTransaction(signature, "confirmed")
+        : await connection.confirmTransaction({
+            signature,
+            blockhash: recentBlockhash,
+            lastValidBlockHeight,
+          }, "confirmed");
       if (confirmation.value.err) {
         throw new Error(`La transaction Jupiter a échoué sur Solana (${signature}).`);
       }
