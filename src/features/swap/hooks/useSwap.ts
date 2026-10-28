@@ -176,6 +176,45 @@ function getVersionedMessageChanges(
   return changes;
 }
 
+function getVersionedMessageSemantics(
+  message: VersionedTransaction["message"],
+  lookupTables: AddressLookupTableAccount[]
+): string {
+  const resolvedKeys = message.getAccountKeys({ addressLookupTableAccounts: lookupTables });
+  const [staticKeys, writableLookupKeys = [], readonlyLookupKeys = []] = resolvedKeys.keySegments();
+  const roles = new Map<string, { signer: boolean; writable: boolean }>();
+  const requiredSignatures = message.header.numRequiredSignatures;
+  const writableSignedLimit = requiredSignatures - message.header.numReadonlySignedAccounts;
+  const writableUnsignedLimit = staticKeys.length - message.header.numReadonlyUnsignedAccounts;
+
+  staticKeys.forEach((key, index) => {
+    roles.set(key.toBase58(), {
+      signer: index < requiredSignatures,
+      writable: index < requiredSignatures
+        ? index < writableSignedLimit
+        : index < writableUnsignedLimit,
+    });
+  });
+  writableLookupKeys.forEach((key) => roles.set(key.toBase58(), { signer: false, writable: true }));
+  readonlyLookupKeys.forEach((key) => roles.set(key.toBase58(), { signer: false, writable: false }));
+
+  const keyAt = (index: number): string => {
+    const key = resolvedKeys.get(index);
+    if (!key) throw new Error("Le wallet a renvoyé un index de compte invalide.");
+    return key.toBase58();
+  };
+
+  return JSON.stringify({
+    feePayer: staticKeys[0]?.toBase58() ?? null,
+    roles: Array.from(roles.entries()).sort(([left], [right]) => left.localeCompare(right)),
+    instructions: message.compiledInstructions.map((instruction) => ({
+      program: keyAt(instruction.programIdIndex),
+      accounts: instruction.accountKeyIndexes.map(keyAt),
+      data: Buffer.from(instruction.data).toString("base64"),
+    })),
+  });
+}
+
 interface JupiterOrderResult {
   transaction: string | null;
   requestId: string | null;
@@ -760,17 +799,27 @@ return {
       onReadyToSign?.(build);
       const signedTransaction = await signTransaction(transaction);
       const changedFields = getVersionedMessageChanges(transaction.message, signedTransaction.message);
-      const walletRefreshedBlockhash =
-        changedFields.length === 1 && changedFields[0] === "blockhash";
-      if (
-        changedFields.length > 0 &&
-        !walletRefreshedBlockhash
-      ) {
+      const walletRefreshedBlockhash = transaction.message.recentBlockhash !== signedTransaction.message.recentBlockhash;
+      let sameTransactionSemantics = false;
+      try {
+        sameTransactionSemantics = getVersionedMessageSemantics(transaction.message, lookupTables) ===
+          getVersionedMessageSemantics(signedTransaction.message, lookupTables);
+      } catch {
+        sameTransactionSemantics = false;
+      }
+      if (!sameTransactionSemantics) {
         throw new Error(
           `Le wallet a modifié le message de transaction (${changedFields.join(", ") || "structure du message"}) ; envoi bloqué.`
         );
       }
-      if (!signedTransaction.signatures[takerSignerIndex]?.some((byte) => byte !== 0)) {
+
+      const signedTakerSignerIndex = signedTransaction.message.staticAccountKeys
+        .slice(0, signedTransaction.message.header.numRequiredSignatures)
+        .findIndex((key) => key.equals(publicKey));
+      if (signedTakerSignerIndex < 0) {
+        throw new Error("Le wallet a modifié les autorisations du signataire ; envoi bloqué.");
+      }
+      if (!signedTransaction.signatures[signedTakerSignerIndex]?.some((byte) => byte !== 0)) {
         throw new Error("Le wallet n’a pas signé la transaction.");
       }
 
