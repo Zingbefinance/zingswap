@@ -38,10 +38,9 @@ import {
 } from "../../../lib/anchor/zingswap";
 
 import { getTokenByMint } from "../../../../lib/tokens/tokenRegistry";
+import { PLATFORM_FEE_BPS, TREASURY_WALLET } from "../../../../app/config/fees";
 import { useSettings } from "../../../components/providers/SettingsContext";
-const ZINGSWAP_TREASURY = new PublicKey(
-  "3rK2JZQ2E4QX5xHvzvRbvGMzaHXUmqECvuuzbuawSjHq"
-);
+const ZINGSWAP_TREASURY = new PublicKey(TREASURY_WALLET);
 
 interface SwapParams {
   amount: string;
@@ -307,6 +306,7 @@ export function useSwap() {
     publicKey,
     connected,
     signTransaction,
+    sendTransaction,
     signAllTransactions,
   } = useWallet();
 
@@ -585,7 +585,7 @@ return {
         result.previewOnly !== true || result.signed !== false || result.submitted !== false ||
         result.inputMint !== inputMint || result.outputMint !== outputMint ||
         result.inAmount !== amount || !/^\d+$/.test(result.outAmount) ||
-        !Number.isFinite(result.platformFeeBps) || result.platformFeeBps <= 0 ||
+        result.platformFeeBps !== PLATFORM_FEE_BPS ||
         !result.feeAccount || result.feeMint !== WSOL_MINT.toBase58() ||
         result.feeAccountIncludedInSwapInstruction !== true
       ) {
@@ -594,6 +594,75 @@ return {
       return result;
     },
     [publicKey]
+  );
+
+  const ensureTreasuryWsolAccount = useCallback(
+    async (onSetupRequired?: (rentLamports: number) => void): Promise<string | null> => {
+      if (!publicKey) throw new Error("Connecte un wallet pour initialiser le compte de collecte WSOL.");
+
+      const treasury = ZINGSWAP_TREASURY;
+      const feeAccount = getAssociatedTokenAddressSync(
+        WSOL_MINT,
+        treasury,
+        true,
+        SPL_TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      );
+      const existingInfo = await connection.getAccountInfo(feeAccount, "confirmed");
+      if (existingInfo) {
+        const account = await getAccount(connection, feeAccount, "confirmed", SPL_TOKEN_PROGRAM_ID);
+        if (
+          !account.isInitialized || account.isFrozen ||
+          !account.owner.equals(treasury) || !account.mint.equals(WSOL_MINT)
+        ) {
+          throw new Error("Le compte WSOL de collecte ZingSwap existe mais est invalide ou gelé.");
+        }
+        return null;
+      }
+
+      const rentLamports = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
+      const walletBalance = await connection.getBalance(publicKey, "confirmed");
+      if (walletBalance < rentLamports) {
+        throw new Error(
+          `Le compte WSOL de collecte n’existe pas. Son initialisation demande environ ${(rentLamports / 1_000_000_000).toFixed(6)} SOL de loyer, mais le solde disponible est insuffisant.`,
+        );
+      }
+
+      onSetupRequired?.(rentLamports);
+      const setupTransaction = new Transaction().add(
+        createAssociatedTokenAccountIdempotentInstruction(
+          publicKey,
+          feeAccount,
+          treasury,
+          WSOL_MINT,
+          SPL_TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+      const setupBlockhash = await connection.getLatestBlockhash("confirmed");
+      setupTransaction.feePayer = publicKey;
+      setupTransaction.recentBlockhash = setupBlockhash.blockhash;
+      const setupSignature = await sendTransaction(setupTransaction, connection, {
+        preflightCommitment: "confirmed",
+      });
+      const confirmation = await connection.confirmTransaction({
+        signature: setupSignature,
+        ...setupBlockhash,
+      }, "confirmed");
+      if (confirmation.value.err) {
+        throw new Error(`Échec de l’initialisation du compte de collecte WSOL (${setupSignature}).`);
+      }
+
+      const account = await getAccount(connection, feeAccount, "confirmed", SPL_TOKEN_PROGRAM_ID);
+      if (
+        !account.isInitialized || account.isFrozen ||
+        !account.owner.equals(treasury) || !account.mint.equals(WSOL_MINT)
+      ) {
+        throw new Error("Le compte WSOL de collecte n’a pas pu être vérifié après initialisation.");
+      }
+      return setupSignature;
+    },
+    [connection, publicKey, sendTransaction],
   );
 
   const getJupiterQuote = useCallback(
@@ -694,6 +763,9 @@ return {
     }): Promise<JupiterBuildPreview> => {
       const inputToken = await getTokenByMint(fromMint.toBase58());
       if (!inputToken) throw new Error("Métadonnées du token d’entrée indisponibles.");
+      if (!fromMint.equals(WSOL_MINT) && !toMint.equals(WSOL_MINT)) {
+        throw new Error("La collecte des frais en WSOL nécessite SOL/WSOL comme token d’entrée ou de sortie.");
+      }
       const amountRaw = toRawAmount(amount, inputToken.decimals).toString();
       return requestJupiterBuild({
         inputMint: fromMint.toBase58(),
@@ -711,14 +783,16 @@ return {
       fromMint,
       toMint,
       slippageBps: requestedSlippageBps,
+      onTreasuryAccountSetup,
       onReadyToSign,
     }: {
       amount: string;
       fromMint: PublicKey;
       toMint: PublicKey;
       slippageBps: number;
+      onTreasuryAccountSetup?: (rentLamports: number) => void;
       onReadyToSign?: (build: JupiterBuildPreview) => void;
-    }): Promise<{ signature: string; amountOut: string; feeAccount: string; platformFeeBps: number }> => {
+    }): Promise<{ signature: string; amountOut: string; feeAccount: string; platformFeeBps: number; treasurySetupSignature: string | null }> => {
       if (!connected || !publicKey || !signTransaction) {
         throw new Error("Connecte un portefeuille capable de signer les transactions.");
       }
@@ -726,6 +800,10 @@ return {
       const inputToken = await getTokenByMint(fromMint.toBase58());
       if (!inputToken) throw new Error("Métadonnées du token d’entrée indisponibles.");
       const amountRaw = toRawAmount(amount, inputToken.decimals).toString();
+      if (!fromMint.equals(WSOL_MINT) && !toMint.equals(WSOL_MINT)) {
+        throw new Error("La collecte des frais en WSOL nécessite SOL/WSOL comme token d’entrée ou de sortie.");
+      }
+      const treasurySetupSignature = await ensureTreasuryWsolAccount(onTreasuryAccountSetup);
       const build = await requestJupiterBuild({
         inputMint: fromMint.toBase58(),
         outputMint: toMint.toBase58(),
@@ -885,9 +963,10 @@ return {
         amountOut: build.outAmount,
         feeAccount: build.feeAccount,
         platformFeeBps: build.platformFeeBps,
+        treasurySetupSignature,
       };
     },
-    [connected, connection, publicKey, requestJupiterBuild, signTransaction]
+    [connected, connection, ensureTreasuryWsolAccount, publicKey, requestJupiterBuild, signTransaction]
   );
 
   const swapOnJupiter = useCallback(

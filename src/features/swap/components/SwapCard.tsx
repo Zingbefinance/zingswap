@@ -11,6 +11,7 @@ import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import TokenButton from "./TokenButton";
 
 import { Token } from "../../../../lib/tokens/types";
+import { PLATFORM_FEE_BPS } from "../../../../app/config/fees";
 import { useSwap, type JupiterQuoteResult } from "../hooks/useSwap";
 
 const ZTC_MINT = "4zihBzwHLx9z7aNmXam181iUd285xbqJNN57M5LhoHpu";
@@ -471,6 +472,11 @@ export default function SwapCard() {
           fromMint: new PublicKey(fromToken.mint),
           toMint: new PublicKey(toToken.mint),
           slippageBps,
+          onTreasuryAccountSetup: (rentLamports) => {
+            setMessage(
+              `Le compte de collecte WSOL n’existe pas encore. Ton wallet va proposer sa création au nom de ZingSwap; le loyer initial est d’environ ${(rentLamports / 1_000_000_000).toFixed(6)} SOL, payé par ton wallet, plus les frais réseau. Après confirmation, le swap sera recalculé avec les frais de 0,30 %.`,
+            );
+          },
           onReadyToSign: (build) => {
             setMessage(
               `Simulation réussie — route externe ; sortie estimée ${formatAtomicAmount(BigInt(build.outAmount), toToken.decimals)} ${toToken.symbol} ; frais ZingSwap : ${(build.platformFeeBps / 100).toFixed(2)} % en WSOL ; destinataire vérifié : ${build.feeAccount}. Vérifie les détails et confirme dans ton wallet pour signer et envoyer.`
@@ -478,7 +484,7 @@ export default function SwapCard() {
           },
         });
         setMessage(
-          `Swap confirmé via la route externe ; signature ${result.signature} ; frais plateforme configurés à ${(result.platformFeeBps / 100).toFixed(2)} % en WSOL vers ${result.feeAccount}. Le montant exact des frais n’est pas fourni séparément.`
+          `Swap confirmé via la route externe ; signature ${result.signature} ; frais plateforme ${(result.platformFeeBps / 100).toFixed(2)} % en WSOL vers ${result.feeAccount}.${result.treasurySetupSignature ? ` Compte de collecte initialisé dans la transaction ${result.treasurySetupSignature}.` : ""}`
         );
         setFromAmount("");
         await refreshBalances();
@@ -793,7 +799,7 @@ export default function SwapCard() {
           </div>
 
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
-            <span>Frais de swap</span>
+            <span>Frais indicatifs de la cotation Jupiter</span>
             <span>
               {displayJupiterQuote?.feeBps != null
                 ? `${(displayJupiterQuote.feeBps / 100).toFixed(2)}%${
@@ -808,7 +814,7 @@ export default function SwapCard() {
           {activeRoute === "jupiter" && (
             <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-zinc-400">
               <span>Frais plateforme ZingSwap</span>
-              <span>Vérifiés par la préparation avant signature</span>
+              <span>{(PLATFORM_FEE_BPS / 100).toFixed(2)}% · vérifiés à la préparation</span>
             </div>
           )}
 
