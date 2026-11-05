@@ -13,13 +13,16 @@ export default function TokenButton({ token, onClick }: Props) {
       className="
         flex
         items-center
+        min-h-11
         min-w-0
         max-w-full
         gap-2
         rounded-xl
         bg-zinc-800
-        px-3
-        py-2
+        px-2.5
+        py-1.5
+        sm:px-3
+        sm:py-2
         font-semibold
         text-white
         transition
@@ -28,7 +31,7 @@ export default function TokenButton({ token, onClick }: Props) {
         cursor-pointer
       "
     >
-      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black sm:h-7 sm:w-7">
         {token.symbol.slice(0, 1)}
       </div>
 

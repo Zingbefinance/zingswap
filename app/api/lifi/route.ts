@@ -12,19 +12,17 @@ function confirmsIntegratorFee(payload: unknown) {
   if (!Array.isArray(estimate?.feeCosts)) return false;
   return estimate.feeCosts.some((feeCost) => {
     if (!feeCost || typeof feeCost !== "object") return false;
-    const { percentage, amount, feeSplit } = feeCost as {
-      percentage?: unknown;
-      amount?: unknown;
-      feeSplit?: { integratorFee?: unknown };
+    const { feeSplit } = feeCost as {
+      feeSplit?: {
+        integratorFee?: unknown;
+        recipients?: Array<{ name?: unknown; fee?: unknown }>;
+      };
     };
-    if (typeof percentage !== "string" && typeof percentage !== "number") return false;
-    if (typeof amount !== "string" && typeof amount !== "number") return false;
-    const positiveAmount = Number(amount);
     const integratorFee = Number(feeSplit?.integratorFee);
-    if (!Number.isFinite(positiveAmount) || positiveAmount <= 0 || !Number.isFinite(integratorFee) || integratorFee <= 0) return false;
-    const parsed = Number(String(percentage).replace(/%$/, ""));
-    const normalized = String(percentage).endsWith("%") ? parsed / 100 : parsed;
-    return Number.isFinite(normalized) && Math.abs(normalized - Number(ZINGSWAP_FEE)) < 1e-9;
+    if (Number.isFinite(integratorFee) && integratorFee > 0) return true;
+    return Array.isArray(feeSplit?.recipients) && feeSplit.recipients.some((recipient) =>
+      recipient?.name === ZINGSWAP_INTEGRATOR && Number.isFinite(Number(recipient.fee)) && Number(recipient.fee) > 0,
+    );
   });
 }
 
@@ -47,6 +45,23 @@ function sanitizeUpstreamMessage(value: unknown) {
     .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[email redacted]")
     .replace(/[\r\n\t]+/g, " ")
     .slice(0, 500);
+}
+
+function getUpstreamMessage(payload: unknown) {
+  if (!payload || typeof payload !== "object") return undefined;
+  const body = payload as Record<string, unknown>;
+  const errors = Array.isArray(body.errors)
+    ? body.errors.filter((entry) => entry && typeof entry === "object") as Array<Record<string, unknown>>
+    : [];
+  const values = [
+    body.message,
+    body.error,
+    ...errors.flatMap((entry) => [entry.message, entry.error]),
+  ];
+  const message = values
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return sanitizeUpstreamMessage(message);
 }
 
 function classifyUpstreamError(status: number, payload: unknown) {
@@ -86,7 +101,9 @@ export async function GET(request: NextRequest) {
   const resource = params.get("resource");
   const fromChain = params.get("fromChain");
   const toChain = params.get("toChain");
-  const usesEvmFee = fromChain === "1" || fromChain === "56" || toChain === "1" || toChain === "56";
+  // LI.FI charges its integrator fee on the source chain. The integration now
+  // has fee wallets configured for EVM and Solana (SVM) source chains.
+  const usesIntegratorFee = fromChain === "1" || fromChain === "56" || fromChain === String(LIFI_SOLANA_CHAIN_ID);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
 
@@ -163,7 +180,7 @@ export async function GET(request: NextRequest) {
       url.searchParams.set("toAddress", toAddress);
       url.searchParams.set("slippage", String(slippage));
       url.searchParams.set("order", "CHEAPEST");
-      if (usesEvmFee) {
+      if (usesIntegratorFee) {
         url.searchParams.set("integrator", ZINGSWAP_INTEGRATOR);
         url.searchParams.set("fee", ZINGSWAP_FEE);
       }
@@ -223,10 +240,13 @@ export async function GET(request: NextRequest) {
           },
         }, { status: 502 });
       }
-      const feeConfirmed = usesEvmFee && confirmsIntegratorFee(payload);
+      const feeConfirmed = usesIntegratorFee && confirmsIntegratorFee(payload);
       return NextResponse.json({
         ...(payload as Record<string, unknown>),
-        zingswapFee: usesEvmFee ? { requested: ZINGSWAP_FEE, confirmed: feeConfirmed } : undefined,
+        zingswapFee: usesIntegratorFee ? { requested: ZINGSWAP_FEE, confirmed: feeConfirmed } : undefined,
+        zingswapFeeUnavailableReason: usesIntegratorFee && !feeConfirmed
+          ? "La cotation LI.FI n’a pas confirmé la commission ZingSwap. Vérifie les frais affichés avant de signer."
+          : undefined,
       }, { headers: { "Cache-Control": "no-store" } });
     }
     if (resource === "status" && response.ok) {
@@ -245,15 +265,16 @@ export async function GET(request: NextRequest) {
     }
     if (resource === "quote" && !response.ok) {
       const classification = classifyUpstreamError(response.status, payload);
+      const upstreamMessage = getUpstreamMessage(payload);
       return NextResponse.json({
-        error: classification.label,
+        error: classification.type === "invalid_request" && upstreamMessage
+          ? `${classification.label} Détail LI.FI : ${upstreamMessage}`
+          : classification.label,
         diagnostic: {
           type: classification.type,
           upstreamStatus: response.status,
           upstreamCode: classification.code,
-          upstreamMessage: sanitizeUpstreamMessage(
-            payload && typeof payload === "object" ? (payload as Record<string, unknown>).message : undefined,
-          ),
+          upstreamMessage,
           upstreamFields: payload && typeof payload === "object" ? Object.keys(payload as Record<string, unknown>) : [],
           upstreamErrorCount: payload && typeof payload === "object" && Array.isArray((payload as Record<string, unknown>).errors)
             ? ((payload as Record<string, unknown>).errors as unknown[]).length

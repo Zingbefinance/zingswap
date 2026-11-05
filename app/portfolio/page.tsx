@@ -3,6 +3,7 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { useLanguage } from "@/components/providers/LanguageContext";
 import useWalletInfo from "../hooks/useWalletInfo";
+import NftGallery from "./NftGallery";
 import { AlertCircle, Coins, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
 
 const amountFormat = (amount: number, decimals: number) => new Intl.NumberFormat(undefined, {
@@ -59,6 +60,8 @@ export default function PortfolioPage() {
             </div>}
           </>}
         </section>}
+
+        {connected && <NftGallery owner={address} french={fr} />}
       </div>
     </MainLayout>
   );

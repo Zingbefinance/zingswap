@@ -11,6 +11,7 @@ type DexScreenerPair = {
 const MINT_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const MAX_MINTS = 120;
 const MINTS_PER_REQUEST = 30;
+const MIN_PRICE_LIQUIDITY_USD = 50_000;
 
 export async function GET(request: NextRequest) {
   const mints = Array.from(
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     const prices: Record<
       string,
-      { usd: number; change24h: number | null }
+      { usd: number; change24h: number | null; source: "DexScreener"; liquidityUsd: number }
     > = {};
 
     for (const mint of mints) {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
             Number.isFinite(Number(candidate.priceUsd)) &&
             Number(candidate.priceUsd) > 0 &&
             Number.isFinite(candidate.liquidity?.usd) &&
-            (candidate.liquidity?.usd ?? 0) > 0
+            (candidate.liquidity?.usd ?? 0) >= MIN_PRICE_LIQUIDITY_USD
         )
         .sort(
           (a, b) =>
@@ -84,6 +85,8 @@ export async function GET(request: NextRequest) {
 
       prices[mint] = {
         usd: Number(pair.priceUsd),
+        source: "DexScreener",
+        liquidityUsd: pair.liquidity!.usd!,
         change24h: Number.isFinite(pair.priceChange?.h24)
           ? pair.priceChange!.h24!
           : null,

@@ -2,7 +2,7 @@
 import { useSelectedToken } from "@/components/providers/TokenContext";
 import { useSettings } from "@/components/providers/SettingsContext";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -11,6 +11,7 @@ import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import TokenButton from "./TokenButton";
 
 import { Token } from "../../../../lib/tokens/types";
+import { getTokenByMint } from "../../../../lib/tokens/tokenRegistry";
 import { PLATFORM_FEE_BPS } from "../../../../app/config/fees";
 import { useSwap, type JupiterQuoteResult } from "../hooks/useSwap";
 
@@ -53,10 +54,21 @@ type QuoteSnapshot<T> = {
   quote: T;
 };
 
-export default function SwapCard() {
+export default function SwapCard({ tradeSide, inputMint, outputMint }: { tradeSide?: "buy" | "sell"; inputMint?: string; outputMint?: string } = {}) {
+  const pathname = usePathname();
   const router = useRouter();
+  const openTokenSearch = (side: "from" | "to") => {
+    const params = new URLSearchParams({ side });
+    if (pathname === "/swap") params.set("returnTo", "/swap");
+    router.push(`/tokens?${params.toString()}`);
+  };
 
   const { fromToken, toToken, setSwapTokens } = useSelectedToken();
+  const selectedMintsRef = useRef("");
+  selectedMintsRef.current = `${fromToken.mint}:${toToken.mint}`;
+  const initialPairRequest = useRef(0);
+  const [resolvedPairKey, setResolvedPairKey] = useState<string | null>(null);
+  const [initialPairFailure, setInitialPairFailure] = useState<{ key: string; message: string } | null>(null);
   const isZtcSolPair =
     (fromToken.mint === ZTC_MINT && toToken.mint === WSOL_MINT) ||
     (fromToken.mint === WSOL_MINT && toToken.mint === ZTC_MINT);
@@ -76,6 +88,64 @@ export default function SwapCard() {
   const { connection } = useConnection();
   const { slippageBps } = useSettings();
   const { swap, getQuote, getJupiterQuote, swapJupiterBuild } = useSwap();
+  const tradingActionLabel = tradeSide === "buy"
+    ? `Acheter ${toToken.symbol}`
+    : tradeSide === "sell"
+      ? `Vendre ${fromToken.symbol}`
+      : "Échanger";
+
+  let requestedMints: { input: string; output: string } | null = null;
+  let initialPairConfigurationError = "";
+  if (inputMint != null || outputMint != null) {
+    if (!inputMint || !outputMint) {
+      initialPairConfigurationError = "La paire transmise est incomplète. Sélectionnez les deux tokens manuellement.";
+    } else {
+      try {
+        const canonicalInput = new PublicKey(inputMint).toBase58();
+        const canonicalOutput = new PublicKey(outputMint).toBase58();
+        if (canonicalInput !== inputMint || canonicalOutput !== outputMint || canonicalInput === canonicalOutput) {
+          throw new Error("Mints invalides ou identiques.");
+        }
+        requestedMints = { input: canonicalInput, output: canonicalOutput };
+      } catch {
+        initialPairConfigurationError = "Les Mints transmis sont invalides ou identiques. Sélectionnez les tokens manuellement.";
+      }
+    }
+  }
+  const requestedPairKey = requestedMints ? `${requestedMints.input}:${requestedMints.output}` : null;
+  const initialPairError = initialPairConfigurationError || (
+    requestedPairKey && initialPairFailure?.key === requestedPairKey ? initialPairFailure.message : ""
+  );
+  const initialPairLoading = Boolean(requestedPairKey && resolvedPairKey !== requestedPairKey && !initialPairError);
+
+  useEffect(() => {
+    if (!requestedPairKey) return;
+
+    let cancelled = false;
+    const requestId = ++initialPairRequest.current;
+    const startingSelection = selectedMintsRef.current;
+    const [requestInputMint, requestOutputMint] = requestedPairKey.split(":");
+    void Promise.all([getTokenByMint(requestInputMint), getTokenByMint(requestOutputMint)])
+      .then(([inputToken, outputToken]) => {
+        if (cancelled || requestId !== initialPairRequest.current) return;
+        if (!inputToken || inputToken.mint !== requestInputMint || !outputToken || outputToken.mint !== requestOutputMint) {
+          setInitialPairFailure({ key: requestedPairKey, message: "Un ou plusieurs tokens n’ont pas pu être résolus par Mint exact. Vous pouvez les sélectionner manuellement." });
+          return;
+        }
+        if (selectedMintsRef.current === startingSelection) setSwapTokens(inputToken, outputToken);
+        setInitialPairFailure(null);
+        setResolvedPairKey(requestedPairKey);
+      })
+      .catch(() => {
+        if (!cancelled && requestId === initialPairRequest.current) {
+          setInitialPairFailure({ key: requestedPairKey, message: "Impossible de charger les tokens transmis. Vous pouvez les sélectionner manuellement." });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedPairKey, setSwapTokens]);
 
   const [fromBalance, setFromBalance] = useState("0.0000");
   const [toBalance, setToBalance] = useState("0.0000");
@@ -548,7 +618,7 @@ export default function SwapCard() {
             <TokenButton
               token={fromToken}
               onClick={() => {
-                router.push("/tokens?side=from");
+                openTokenSearch("from");
               }}
             />
           </div>
@@ -656,7 +726,7 @@ export default function SwapCard() {
             <TokenButton
               token={toToken}
               onClick={() => {
-                router.push("/tokens?side=to");
+                openTokenSearch("to");
               }}
             />
           </div>
@@ -879,6 +949,12 @@ export default function SwapCard() {
         )}
 
         {/* MESSAGE */}
+        {initialPairLoading && (
+          <p role="status" className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-300">Chargement des tokens transmis…</p>
+        )}
+        {initialPairError && (
+          <p role="alert" className="rounded-xl border border-amber-800 bg-amber-950/40 p-3 text-xs text-amber-200">{initialPairError}</p>
+        )}
         {message && (
           <div className="break-all rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-300">
             {message}
@@ -891,6 +967,7 @@ export default function SwapCard() {
           onClick={handleSwap}
           disabled={
             loading ||
+            initialPairLoading ||
             activeQuoteLoading ||
             balanceUnavailable ||
             insufficientSol ||
@@ -917,7 +994,7 @@ export default function SwapCard() {
                 ? "Vérification du solde SOL…"
             : !connected
               ? "Connect Wallet"
-              : "Échanger"}
+              : tradingActionLabel}
         </button>
 
       </div>

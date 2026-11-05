@@ -1,7 +1,9 @@
 "use client";
 
 import { useLanguage } from "@/components/providers/LanguageContext";
-import { Search, Wallet } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { CandlestickChart, Search, Wallet } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useEvmWallet } from "@/components/providers/EvmWalletProvider";
@@ -11,6 +13,7 @@ export default function Topbar() {
   const { connected: solConnected, publicKey: solPublicKey, disconnect: disconnectSolana } = useWallet();
   const { setVisible } = useWalletModal();
   const { language } = useLanguage();
+  const pathname = usePathname();
   const evm = useEvmWallet();
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [walletActionError, setWalletActionError] = useState("");
@@ -36,7 +39,7 @@ export default function Topbar() {
   const evmNetworkName = evm.chainId === 1 ? "Ethereum" : evm.chainId === 56 ? "BNB Chain" : evm.chainId ? `Réseau EVM ${evm.chainId}` : "Réseau non détecté";
 
   return (
-    <header className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4 md:px-6 md:py-4">
+    <header className="relative z-[60] min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4 md:px-6 md:py-4">
       {/* Ligne du haut */}
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -54,16 +57,28 @@ export default function Topbar() {
         </div>
 
         <div className="relative">
-          <button
-            type="button"
-            onClick={() => setWalletMenuOpen((open) => !open)}
-            aria-expanded={walletMenuOpen}
-            aria-haspopup="dialog"
-            className="flex max-w-[52vw] cursor-pointer items-center gap-2 rounded-xl bg-cyan-500 px-3 py-2 text-sm font-semibold text-black transition hover:bg-cyan-400 active:scale-95 sm:max-w-none sm:px-4 sm:text-base"
-          >
-            <Wallet size={18} />
-            <span className="hidden sm:inline">{solConnected ? shortAddress(solPublicKey?.toBase58() ?? "") : evm.account ? shortAddress(evm.account) : t.connectWallet}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/trading"
+              aria-current={pathname === "/trading" ? "page" : undefined}
+              aria-label={language === "Français" ? "Ouvrir l’espace de trading" : "Open trading"}
+              className={`flex shrink-0 items-center gap-2 rounded-xl border px-2 py-2 text-xs font-semibold transition active:scale-95 sm:px-4 sm:text-sm ${pathname === "/trading" ? "border-cyan-400 bg-cyan-950/60 text-cyan-100" : "border-cyan-700 text-cyan-200 hover:border-cyan-400 hover:bg-cyan-950/60"}`}
+            >
+              <CandlestickChart size={18} />
+              <span>{language === "Français" ? "Trading" : "Trade"}</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setWalletMenuOpen((open) => !open)}
+              aria-expanded={walletMenuOpen}
+              aria-haspopup="dialog"
+              aria-label={t.connectWallet}
+              className="flex max-w-[44vw] cursor-pointer items-center gap-2 rounded-xl bg-cyan-500 px-2 py-2 text-xs font-semibold text-black transition hover:bg-cyan-400 active:scale-95 sm:max-w-none sm:px-4 sm:text-base"
+            >
+              <Wallet size={18} />
+              <span className="min-w-0 truncate">{solConnected ? shortAddress(solPublicKey?.toBase58() ?? "") : evm.account ? shortAddress(evm.account) : t.connectWallet}</span>
+            </button>
+          </div>
 
           {walletMenuOpen && <div role="dialog" aria-label={language === "Français" ? "Connexion des wallets" : "Wallet connections"} className="absolute right-0 z-50 mt-2 max-h-[calc(100dvh-7rem)] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 p-3 text-white shadow-2xl sm:p-4">
             <div className="mb-3 flex items-center justify-between">
@@ -99,6 +114,10 @@ export default function Topbar() {
                 </button>)}
                 {!evm.wallets.length && <p className="text-xs text-zinc-500">{language === "Français" ? "Aucun wallet EVM injecté détecté dans ce navigateur." : "No injected EVM wallet detected in this browser."}</p>}
                 <button type="button" onClick={openTrustWallet} className="w-full rounded-lg border border-cyan-800 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-950/40">{language === "Français" ? "Ouvrir dans Trust Wallet mobile" : "Open in Trust Wallet mobile"}</button>
+                <div className="grid grid-cols-2 gap-2">
+                  <a href="https://metamask.io/download/" target="_blank" rel="noreferrer" className="rounded-lg border border-zinc-700 px-3 py-2 text-center text-xs text-zinc-300 hover:bg-zinc-800">{language === "Français" ? "MetaMask · installer" : "MetaMask · get wallet"}</a>
+                  <a href="https://www.coinbase.com/wallet/downloads" target="_blank" rel="noreferrer" className="rounded-lg border border-zinc-700 px-3 py-2 text-center text-xs text-zinc-300 hover:bg-zinc-800">{language === "Français" ? "Coinbase Wallet · installer" : "Coinbase Wallet · get wallet"}</a>
+                </div>
               </div>}
               {evm.error && <p role="alert" className="mt-2 text-xs text-red-300">{evm.error}</p>}
             </section>

@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   Droplets,
   BarChart3,
+  CandlestickChart,
   Wallet,
   Settings,
 } from "lucide-react";
@@ -16,7 +17,12 @@ const menu = [
   {
     icon: ArrowLeftRight,
     key: "swap",
-    href: "/",
+    href: "/swap",
+  },
+  {
+    icon: CandlestickChart,
+    key: "trading",
+    href: "/trading",
   },
   {
     icon: Droplets,
@@ -45,6 +51,7 @@ const labels = {
     swap: "Swap",
     liquidity: "Liquidité",
     analytics: "Graphique",
+    trading: "Trading",
     portfolio: "Portefeuille",
     settings: "Paramètres",
   },
@@ -52,6 +59,7 @@ const labels = {
     swap: "Swap",
     liquidity: "Liquidity",
     analytics: "Analytics",
+    trading: "Trading",
     portfolio: "Portfolio",
     settings: "Settings",
   },

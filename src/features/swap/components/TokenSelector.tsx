@@ -25,13 +25,13 @@ export default function TokenSelector({
             min-w-0
             gap-3
             rounded-lg
-            p-3
+            p-2.5 sm:p-3
             text-left
             transition
             hover:bg-zinc-800
           "
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-black sm:h-8 sm:w-8">
             {token.symbol.slice(0, 1)}
           </div>
 

@@ -73,7 +73,7 @@ export default function Sidebar() {
             height={1200}
             className="h-10 w-10 shrink-0 object-contain"
           />
-          <h1 className="text-2xl font-bold text-violet-500">ZingSwap</h1>
+          <span className="text-2xl font-bold text-violet-500">ZingSwap</span>
         </div>
 
         <p className="text-xs text-gray-400 mt-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Search } from "lucide-react";
@@ -12,9 +12,22 @@ import {
 import { Token } from "@/lib/tokens/types";
 import { useSelectedToken } from "@/components/providers/TokenContext";
 import { getSwapNetwork } from "@/lib/lifi/chains";
+import { getPinnedUsdtToken } from "@/lib/lifi/pinnedUsdt";
 
 type SearchToken = Token & { address?: string; chainId?: number; logoURI?: string; priceUSD?: string | number };
 const EVM_ADDRESS = /^0x[\da-fA-F]{40}$/;
+
+function resolveReturnTo(value: string | null) {
+  return value === "/swap" ? value : "/";
+}
+
+function buildReturnHref(params: URLSearchParams, returnTo: string) {
+  params.delete("side");
+  params.delete("network");
+  params.delete("returnTo");
+  const query = params.toString();
+  return query ? `${returnTo}?${query}` : returnTo;
+}
 
 function TokensContent() {
   const router = useRouter();
@@ -23,32 +36,55 @@ function TokensContent() {
   const {
     setSelectedToken,
     setSelectedSide,
+    selectSwapToken,
   } = useSelectedToken();
 
   const side = searchParams.get("side");
   const network = searchParams.get("network");
+  const returnTo = resolveReturnTo(searchParams.get("returnTo"));
   const isEvmSearch = Boolean(network);
   const networkName = network ? getSwapNetwork(Number(network))?.name ?? `Réseau ${network}` : "";
 
-  const [tokens, setTokens] = useState<SearchToken[]>(
-    getLocalTokenList()
-  );
+  const [tokens, setTokens] = useState<SearchToken[]>([]);
+  const [tokenResultKey, setTokenResultKey] = useState("");
   const [evmTokenList, setEvmTokenList] = useState<SearchToken[]>([]);
 
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [asyncLoadingKey, setAsyncLoadingKey] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [prices, setPrices] = useState<
-    Record<string, { usd: number; change24h: number | null }>
-  >({});
-  const [pricesLoading, setPricesLoading] = useState(false);
-  const [pricesUnavailable, setPricesUnavailable] = useState(false);
+  const [priceResult, setPriceResult] = useState<{ key: string; prices: Record<string, { usd: number; change24h: number | null }>; unavailable: boolean } | null>(null);
+  const [loadedTokenNetwork, setLoadedTokenNetwork] = useState<string | null>(null);
+
+  const query = search.trim();
+  const selectedChainId = Number(network);
+  const listedAddressToken = isEvmSearch && EVM_ADDRESS.test(query)
+    ? evmTokenList.find((token) =>
+      token.chainId === selectedChainId &&
+      (token.address ?? token.mint).toLowerCase() === query.toLowerCase() &&
+      typeof token.symbol === "string" && token.symbol.trim().length > 0 &&
+      typeof token.name === "string" && token.name.trim().length > 0 &&
+      Number.isInteger(token.decimals) && token.decimals >= 0 && token.decimals <= 255,
+    )
+    : undefined;
+  const evmResults = useMemo(() => query
+    ? evmTokenList.filter((token) => token.chainId === selectedChainId && `${token.symbol} ${token.name} ${token.address ?? token.mint}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    : evmTokenList, [evmTokenList, query, selectedChainId]);
+  const activeSearchKey = isEvmSearch
+    ? EVM_ADDRESS.test(query) ? `evm:${network}:${query.toLowerCase()}` : `evm:${network}:list:${query.toLowerCase()}`
+    : query ? `sol:${query.toLowerCase()}` : "sol:all";
+  const displayedTokens = useMemo<SearchToken[]>(() => isEvmSearch
+    ? listedAddressToken ? [listedAddressToken] : EVM_ADDRESS.test(query) ? (tokenResultKey === activeSearchKey ? tokens : []) : evmResults
+    : query ? (tokenResultKey === activeSearchKey ? tokens : []) : getLocalTokenList(), [isEvmSearch, listedAddressToken, query, tokenResultKey, activeSearchKey, tokens, evmResults]);
+  const pricesKey = Array.from(new Set(displayedTokens.map((token) => token.mint))).sort().join(",");
+  const prices = priceResult?.key === pricesKey ? priceResult.prices : {};
+  const pricesLoading = !isEvmSearch && displayedTokens.length > 0 && priceResult?.key !== pricesKey;
+  const pricesUnavailable = priceResult?.key === pricesKey && priceResult.unavailable;
+  const loading = (Boolean(network) && loadedTokenNetwork !== network) ||
+    ((isEvmSearch && EVM_ADDRESS.test(query) && !listedAddressToken) || (!isEvmSearch && Boolean(query))) && tokenResultKey !== activeSearchKey || asyncLoadingKey === activeSearchKey;
 
   useEffect(() => {
     if (!network) return;
     let cancelled = false;
-    setLoading(true);
-    setError("");
     fetch(`/api/lifi?resource=tokens&chainId=${encodeURIComponent(network)}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json() as { tokens?: Record<string, SearchToken[]>; error?: string };
@@ -56,30 +92,39 @@ function TokensContent() {
         return payload.tokens?.[network] ?? [];
       })
       .then((list) => {
-        if (!cancelled) setEvmTokenList(list
-          .filter((token) => token.chainId === Number(network) && typeof token.address === "string")
-          .map((token) => ({ ...token, mint: token.address! })));
+        if (!cancelled) {
+          const remoteTokens = list
+            .filter((token) => token.chainId === Number(network) && typeof token.address === "string")
+            .map((token) => ({ ...token, mint: token.address! }));
+          const pinnedUsdt = getPinnedUsdtToken(Number(network));
+          const tokenList = pinnedUsdt && !remoteTokens.some((token) => token.address?.toLowerCase() === pinnedUsdt.address.toLowerCase())
+            ? [...remoteTokens, pinnedUsdt]
+            : remoteTokens;
+          setEvmTokenList(tokenList);
+          setError("");
+        }
       })
-      .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Impossible de charger les tokens du réseau."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch((cause) => {
+        if (!cancelled) {
+          const pinnedUsdt = getPinnedUsdtToken(Number(network));
+          if (pinnedUsdt) {
+            setEvmTokenList([pinnedUsdt]);
+            setError("");
+          } else {
+            setError(cause instanceof Error ? cause.message : "Impossible de charger les tokens du réseau.");
+          }
+        }
+      })
+      .finally(() => { if (!cancelled) setLoadedTokenNetwork(network); });
     return () => { cancelled = true; };
   }, [network]);
 
   useEffect(() => {
-    if (isEvmSearch) return;
-    if (tokens.length === 0) {
-      setPrices({});
-      setPricesLoading(false);
-      setPricesUnavailable(false);
-      return;
-    }
-
     let cancelled = false;
-    const mints = Array.from(new Set(tokens.map((token) => token.mint)));
-
-    setPrices({});
-    setPricesLoading(true);
-    setPricesUnavailable(false);
+    if (isEvmSearch) return;
+    if (!pricesKey) return () => { cancelled = true; };
+    const mints = pricesKey.split(",");
+    const key = mints.slice().sort().join(",");
 
     fetch(`/api/tokens/prices?mints=${encodeURIComponent(mints.join(","))}`)
       .then(async (response) => {
@@ -89,19 +134,16 @@ function TokensContent() {
         };
       })
       .then((data) => {
-        if (!cancelled) setPrices(data.prices ?? {});
+        if (!cancelled) setPriceResult({ key, prices: data.prices ?? {}, unavailable: false });
       })
       .catch(() => {
-        if (!cancelled) setPricesUnavailable(true);
-      })
-      .finally(() => {
-        if (!cancelled) setPricesLoading(false);
+        if (!cancelled) setPriceResult({ key, prices: {}, unavailable: true });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [tokens, isEvmSearch]);
+  }, [pricesKey, isEvmSearch]);
 
   const formatUsd = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -119,24 +161,8 @@ function TokensContent() {
       if (EVM_ADDRESS.test(query)) {
         let cancelled = false;
         const normalizedAddress = query.toLowerCase();
-        const listedToken = evmTokenList.find((token) =>
-          token.chainId === selectedChainId &&
-          (token.address ?? token.mint).toLowerCase() === normalizedAddress &&
-          typeof token.symbol === "string" && token.symbol.trim().length > 0 &&
-          typeof token.name === "string" && token.name.trim().length > 0 &&
-          Number.isInteger(token.decimals) && token.decimals >= 0,
-        );
-
-        if (listedToken) {
-          setTokens([listedToken]);
-          setLoading(false);
-          setError("");
-          return () => { cancelled = true; };
-        }
-
-        setTokens([]);
-        setLoading(true);
-        setError("");
+        if (listedAddressToken) return;
+        const key = `evm:${network}:${normalizedAddress}`;
         fetch(`/api/lifi?resource=token&chainId=${encodeURIComponent(network ?? "")}&address=${encodeURIComponent(query)}`, { cache: "no-store" })
           .then(async (response) => {
             const payload = await response.json() as { token?: SearchToken; error?: string } & SearchToken;
@@ -146,7 +172,7 @@ function TokensContent() {
           })
           .then((token) => {
             if (!token) {
-              if (!cancelled) setTokens([]);
+              if (!cancelled) { setTokens([]); setTokenResultKey(key); setError(""); }
               return;
             }
             const address = typeof token.address === "string" ? token.address : token.mint;
@@ -156,44 +182,36 @@ function TokensContent() {
               typeof address === "string" && address.toLowerCase() === normalizedAddress &&
               typeof token.symbol === "string" && token.symbol.trim().length > 0 &&
               typeof token.name === "string" && token.name.trim().length > 0 &&
-              Number.isInteger(token.decimals) && token.decimals >= 0
+              Number.isInteger(token.decimals) && token.decimals >= 0 && token.decimals <= 255
             ) {
               setTokens([{ ...token, address, mint: address }]);
+              setTokenResultKey(key);
+              setError("");
               return;
             }
             setTokens([]);
+            setTokenResultKey(key);
+            setError("");
           })
           .catch((cause) => {
             if (cancelled) return;
             setTokens([]);
+            setTokenResultKey(key);
             // An unknown address is an empty result; a failed lookup is a service error.
             if (cause instanceof Error && !/404|not found|unknown token/i.test(cause.message)) setError(cause.message);
           })
-          .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
       }
-
-      const normalized = query.toLocaleLowerCase();
-      setTokens(evmTokenList.filter((token) =>
-        token.chainId === selectedChainId &&
-        `${token.symbol} ${token.name} ${token.address ?? token.mint}`.toLocaleLowerCase().includes(normalized),
-      ));
-      setLoading(false);
       return;
     }
 
-    if (!query) {
-      setTokens(getLocalTokenList());
-      setLoading(false);
-      setError("");
-      return;
-    }
-
+    if (!query) return;
     let cancelled = false;
+    const key = `sol:${query.toLowerCase()}`;
 
     const timer = setTimeout(async () => {
       try {
-        setLoading(true);
+        setAsyncLoadingKey(key);
         setError("");
 
         const result = await searchTokens(query);
@@ -205,6 +223,7 @@ function TokensContent() {
           );
           const resultMints = new Set(result.map((token) => token.mint));
           setTokens([...result, ...localMintMatches.filter((token) => !resultMints.has(token.mint))]);
+          setTokenResultKey(key);
         }
       } catch (err) {
         if (!cancelled) {
@@ -218,10 +237,11 @@ function TokensContent() {
           );
 
           setTokens([]);
+          setTokenResultKey(key);
         }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          setAsyncLoadingKey((current) => current === key ? null : current);
         }
       }
     }, 350);
@@ -230,38 +250,32 @@ function TokensContent() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, isEvmSearch, network, evmTokenList]);
+  }, [search, isEvmSearch, network, evmTokenList, listedAddressToken]);
 
   const handleSelectToken = (token: SearchToken) => {
     if (isEvmSearch) {
       if ((side !== "from" && side !== "to") || token.chainId !== Number(network)) return;
       const params = new URLSearchParams(searchParams.toString());
-      params.delete("side");
-      params.delete("network");
       params.set("fromToken", side === "from" ? token.mint : params.get("fromToken") ?? "");
       params.set("toToken", side === "to" ? token.mint : params.get("toToken") ?? "");
-      router.push(`/?${params.toString()}`);
+      router.push(buildReturnHref(params, returnTo));
       return;
     }
-    setSelectedToken({
-      symbol: token.symbol,
-      name: token.name,
-      mint: token.mint,
-      decimals: token.decimals,
-    });
-
     if (side === "from" || side === "to") {
-      setSelectedSide(side);
-    } else {
-      setSelectedSide(null);
+      selectSwapToken(side, {
+        symbol: token.symbol,
+        name: token.name,
+        mint: token.mint,
+        decimals: token.decimals,
+      });
     }
+    setSelectedToken({ symbol: token.symbol, name: token.name, mint: token.mint, decimals: token.decimals });
+    setSelectedSide(null);
 
-    router.push("/");
+    router.push(buildReturnHref(new URLSearchParams(searchParams.toString()), returnTo));
   };
 
-  const backHref = isEvmSearch
-    ? `/?${(() => { const params = new URLSearchParams(searchParams.toString()); params.delete("side"); params.delete("network"); return params.toString(); })()}`
-    : "/";
+  const backHref = buildReturnHref(new URLSearchParams(searchParams.toString()), returnTo);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-zinc-950 px-3 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white sm:px-4 sm:py-6">
@@ -372,7 +386,7 @@ function TokensContent() {
 
           {!loading &&
             !error &&
-            tokens.length === 0 && (
+            displayedTokens.length === 0 && (
               <div
                 className="
                   rounded-xl
@@ -389,10 +403,10 @@ function TokensContent() {
 
           {!loading &&
             !error &&
-            tokens.length > 0 && (
+            displayedTokens.length > 0 && (
               <div className="space-y-1">
 
-                {tokens.map((token) => (
+                {displayedTokens.map((token) => (
                   <button
                     key={token.mint}
                     type="button"

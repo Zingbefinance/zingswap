@@ -88,9 +88,9 @@ export default function AnalyticsChart({ data, loading, error, period, onPeriodC
                 const x = chart.pad.left + chart.step * (index + 0.5);
                 const rising = candle.close > candle.open;
                 const color = rising ? "#22c55e" : "#ef4444";
-                const candleWidth = Math.max(2, Math.min(12, chart.step * 0.68));
+                const candleWidth = Math.max(3, Math.min(14, chart.step * 0.78));
                 const bodyTop = Math.min(chart.y(candle.open), chart.y(candle.close));
-                const bodyHeight = Math.max(1, Math.abs(chart.y(candle.open) - chart.y(candle.close)));
+                const bodyHeight = Math.max(2.5, Math.abs(chart.y(candle.open) - chart.y(candle.close)));
                 return <g key={`${candle.time}-${index}`} onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(null)}>
                   <rect x={x - chart.step / 2} y={chart.pad.top} width={chart.step} height={chart.height - chart.pad.top - chart.pad.bottom} fill="transparent" />
                   <line x1={x} x2={x} y1={chart.y(candle.high)} y2={chart.y(candle.low)} stroke={color} strokeWidth="2" />

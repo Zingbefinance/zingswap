@@ -3,4 +3,6 @@ export interface Token {
   name: string;
   mint: string;
   decimals: number;
+  logoURI?: string;
+  priceUSD?: number;
 }

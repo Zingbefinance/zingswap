@@ -3,10 +3,10 @@ import { Flame, Image as ImageIcon, Rocket } from "lucide-react";
 
 import MainLayout from "@/components/layout/MainLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
-import SwapNetworkSwitcher from "@/features/swap/components/SwapNetworkSwitcher";
 import { getTrendingTokens, zingNews } from "@/lib/zingHub";
 import ZingNewsCarousel from "@/components/zinghub/ZingNewsCarousel";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "ZingSwap, application web de swap de tokens",
@@ -27,8 +27,20 @@ export const metadata: Metadata = {
     images: ["/images/zingswap-logo.png"],
   },
 };
-export default async function Home() {
+async function TrendingTokens() {
   const trendingTokens = await getTrendingTokens();
+  return <>
+    {trendingTokens.map((token) => (
+      <Link
+        key={token.symbol}
+        href={`/analytics?symbol=${token.symbol}`}
+        className={`rounded-full border px-3 py-1 text-sm transition ${token.symbol === "ZTC" ? "border-cyan-400 bg-cyan-500/20 text-cyan-300" : "border-zinc-700 text-zinc-300 hover:border-cyan-400 hover:text-cyan-400"}`}
+      >{token.name}<span className="ml-1 text-xs opacity-70">{token.tag}</span></Link>
+    ))}
+  </>;
+}
+
+export default function Home() {
   return (
     <MainLayout>
       <div className="flex flex-col gap-6">
@@ -40,10 +52,18 @@ export default async function Home() {
           </p>
         </section>
 
-        {/* Swap en premier sur mobile */}
-        <div className="order-1 md:order-2">
-          <SwapNetworkSwitcher />
-        </div>
+        <section aria-labelledby="swap-access-title" className="order-1 flex flex-col gap-4 rounded-2xl border border-cyan-900/70 bg-gradient-to-br from-cyan-950/50 to-zinc-950 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 md:order-2">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.16em] text-cyan-300">Échange multichaîne</p>
+            <h2 id="swap-access-title" className="mt-1 text-xl font-bold text-white">Échangez vos crypto-actifs sur ZingSwap</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+              Retrouvez les parcours de swap disponibles sur Solana, Ethereum, BNB Smart Chain et TON sur la page dédiée.
+            </p>
+          </div>
+          <Link href="/swap" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-cyan-400">
+            Accéder au Swap <span aria-hidden="true">→</span>
+          </Link>
+        </section>
 
         <section aria-labelledby="supported-assets-title" className="order-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
           <h2 id="supported-assets-title" className="text-lg font-bold text-white">Réseaux, tokens et outils disponibles</h2>
@@ -109,23 +129,9 @@ export default async function Home() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {trendingTokens.map((token) => (
-                    <Link
-                      key={token.symbol}
-                      href={`/analytics?symbol=${token.symbol}`}
-                      className={`rounded-full border px-3 py-1 text-sm transition ${
-                        token.symbol === "ZTC"
-                          ? "border-cyan-400 bg-cyan-500/20 text-cyan-300"
-                          : "border-zinc-700 text-zinc-300 hover:border-cyan-400 hover:text-cyan-400"
-                      }`}
-                    >
-                      {token.name}
-
-                      <span className="ml-1 text-xs opacity-70">
-                        {token.tag}
-                      </span>
-                    </Link>
-                  ))}
+                  <Suspense fallback={<span className="text-sm text-zinc-500">Chargement des tendances…</span>}>
+                    <TrendingTokens />
+                  </Suspense>
                 </div>
               </div>
 

@@ -1,33 +1,40 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SwapCard from "./SwapCard";
 import EvmSwapCard from "./EvmSwapCard";
 import TonSwapCard from "./TonSwapCard";
 import { getSwapNetwork, isTonNetwork, isSolanaNetwork, LIFI_SOLANA_CHAIN_ID, SWAP_NETWORKS, type SwapNetworkId } from "@/lib/lifi/chains";
+import { BSC_USDT_ADDRESS, SOLANA_USDT_ADDRESS } from "@/lib/lifi/pinnedUsdt";
 
 type NetworkSide = "from" | "to";
 
-export default function SwapNetworkSwitcher() {
-  const [fromChain, setFromChain] = useState<SwapNetworkId>(LIFI_SOLANA_CHAIN_ID);
-  const [toChain, setToChain] = useState<SwapNetworkId>(LIFI_SOLANA_CHAIN_ID);
-  const [initialFromToken, setInitialFromToken] = useState("");
-  const [initialToToken, setInitialToToken] = useState("");
-  const [dialogSide, setDialogSide] = useState<NetworkSide | null>(null);
+function networkFromParam(value: string | null): SwapNetworkId | null {
+  const id = Number(value);
+  return SWAP_NETWORKS.some((network) => network.id === id) ? id as SwapNetworkId : null;
+}
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const validNetwork = (value: string | null): SwapNetworkId | null => {
-      const id = Number(value);
-      return SWAP_NETWORKS.some((network) => network.id === id) ? id as SwapNetworkId : null;
-    };
-    const nextFrom = validNetwork(params.get("fromChain"));
-    const nextTo = validNetwork(params.get("toChain"));
-    if (nextFrom) setFromChain(nextFrom);
-    if (nextTo) setToChain(nextTo);
-    setInitialFromToken(params.get("fromToken") ?? "");
-    setInitialToToken(params.get("toToken") ?? "");
-  }, []);
+export default function SwapNetworkSwitcher() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
+  const routeFromChain = networkFromParam(searchParams.get("fromChain"));
+  const routeToChain = networkFromParam(searchParams.get("toChain"));
+  const [networkOverride, setNetworkOverride] = useState<{
+    searchKey: string;
+    from: SwapNetworkId;
+    to: SwapNetworkId;
+  } | null>(null);
+  const overrideIsCurrent = networkOverride?.searchKey === searchKey;
+  const fromChain = overrideIsCurrent ? networkOverride.from : routeFromChain ?? LIFI_SOLANA_CHAIN_ID;
+  const toChain = overrideIsCurrent ? networkOverride.to : routeToChain ?? LIFI_SOLANA_CHAIN_ID;
+  const [dialogSide, setDialogSide] = useState<NetworkSide | null>(null);
+  const inputMint = searchParams.get("inputMint") ?? undefined;
+  const outputMint = searchParams.get("outputMint") ?? undefined;
+  const initialFromToken = routeFromChain === fromChain ? searchParams.get("fromToken") ?? "" : "";
+  const initialToToken = routeToChain === toChain ? searchParams.get("toToken") ?? "" : "";
 
   useEffect(() => {
     if (!dialogSide) return;
@@ -41,13 +48,28 @@ export default function SwapNetworkSwitcher() {
   const fromNetwork = getSwapNetwork(fromChain)!;
   const toNetwork = getSwapNetwork(toChain)!;
   const selectNetwork = (networkId: SwapNetworkId) => {
-    if (dialogSide === "from") setFromChain(networkId);
-    if (dialogSide === "to") setToChain(networkId);
+    setNetworkOverride({
+      searchKey,
+      from: dialogSide === "from" ? networkId : fromChain,
+      to: dialogSide === "to" ? networkId : toChain,
+    });
     setDialogSide(null);
+  };
+  const selectSolanaToBscUsdt = () => {
+    const params = new URLSearchParams(searchKey);
+    params.set("fromChain", String(LIFI_SOLANA_CHAIN_ID));
+    params.set("toChain", "56");
+    params.set("fromToken", SOLANA_USDT_ADDRESS);
+    params.set("toToken", BSC_USDT_ADDRESS);
+    router.push(`${pathname}?${params.toString()}`);
   };
 
   return (
     <section className="space-y-3">
+      <button type="button" onClick={selectSolanaToBscUsdt} className="w-full rounded-xl border border-cyan-800 bg-cyan-950/40 px-4 py-3 text-left text-sm text-cyan-100 transition hover:border-cyan-500 hover:bg-cyan-950/70">
+        <span className="block font-semibold">USDT Solana → USDT BEP-20</span>
+        <span className="mt-1 block text-xs text-cyan-200/70">Préparer le swap vers Binance-Peg USDT sur BNB Chain</span>
+      </button>
       <div className="grid gap-3 sm:grid-cols-2">
         {([
           ["from", "Réseau de départ", fromNetwork.name],
@@ -93,7 +115,7 @@ export default function SwapNetworkSwitcher() {
         : isTonNetwork(fromChain) || isTonNetwork(toChain)
         ? <TonSwapCard fromChain={fromChain} toChain={toChain} />
         : fromChain === LIFI_SOLANA_CHAIN_ID && toChain === LIFI_SOLANA_CHAIN_ID
-        ? <SwapCard />
+        ? <SwapCard inputMint={inputMint} outputMint={outputMint} />
         : <EvmSwapCard fromChain={fromChain} toChain={toChain} initialFromToken={initialFromToken} initialToToken={initialToToken} />}
     </section>
   );

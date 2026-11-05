@@ -1,15 +1,13 @@
 import { Token } from "./types";
 import { TOKENS } from "./tokens";
 
-const TOKEN_SEARCH_URL = "https://api.jup.ag/tokens/v2/search";
-
 let cache: Token[] | null = null;
 
-function mergeWithLocalTokens(remoteTokens: Token[]): Token[] {
+function mergeWithLocalTokens(remoteTokens: Token[], localTokens: Token[] = TOKENS): Token[] {
   const tokenMap = new Map<string, Token>();
 
-  // Les tokens locaux ZingSwap sont toujours prioritaires.
-  for (const token of TOKENS) {
+  // Les tokens locaux ZingSwap sont prioritaires lorsqu'ils correspondent à la recherche.
+  for (const token of localTokens) {
     tokenMap.set(token.mint, token);
   }
 
@@ -25,14 +23,14 @@ function mergeWithLocalTokens(remoteTokens: Token[]): Token[] {
 
 /**
  * Retourne les tokens locaux de ZingSwap.
- * SOL et ZTC restent toujours disponibles.
+ * SOL, ZTC, USDT et USDC restent toujours disponibles.
  */
 export function getLocalTokenList(): Token[] {
   return TOKENS;
 }
 
 /**
- * Recherche des tokens Solana via Jupiter Tokens API V2.
+ * Recherche des tokens Solana via notre proxy serveur vers Jupiter Tokens API V2.
  *
  * La recherche peut utiliser :
  * - symbole
@@ -49,52 +47,53 @@ export async function searchTokens(
   }
 
   try {
-    const response = await fetch(
-      `${TOKEN_SEARCH_URL}?query=${encodeURIComponent(
-        normalizedQuery
-      )}`,
-      {
-        cache: "no-store",
-      }
-    );
+    const response = await fetch(`/api/tokens/search?query=${encodeURIComponent(normalizedQuery)}`, { cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as { tokens?: (Token & { logoURI?: string; priceUSD?: number })[] };
 
-    if (!Array.isArray(data)) {
+    if (!Array.isArray(data.tokens)) {
       throw new Error(
         "Format de recherche de tokens invalide."
       );
     }
 
-    const remoteTokens: Token[] = data
+    const remoteTokens: Token[] = data.tokens
       .filter(
         (token) =>
-          typeof token.id === "string" &&
+          typeof token.mint === "string" &&
           typeof token.symbol === "string" &&
           typeof token.name === "string" &&
-          typeof token.decimals === "number"
+          Number.isInteger(token.decimals) && token.decimals >= 0 && token.decimals <= 255
       )
       .map((token) => ({
         symbol: token.symbol,
         name: token.name,
-        mint: token.id,
+        mint: token.mint,
         decimals: token.decimals,
+        ...(token.logoURI ? { logoURI: token.logoURI } : {}),
+        ...(token.priceUSD ? { priceUSD: token.priceUSD } : {}),
       }));
 
-    return mergeWithLocalTokens(remoteTokens);
+    const normalized = normalizedQuery.toLocaleLowerCase();
+    const localMatches = TOKENS.filter((token) =>
+      `${token.symbol} ${token.name} ${token.mint}`.toLocaleLowerCase().includes(normalized),
+    );
+    return mergeWithLocalTokens(remoteTokens, localMatches);
   } catch (error) {
     console.warn(
       "Impossible de rechercher les tokens via Jupiter.",
       error
     );
 
-    // Même si Jupiter est indisponible,
-    // SOL et ZTC restent disponibles.
-    return TOKENS;
+    // Les tokens locaux recherchés restent disponibles si Jupiter est momentanément inaccessible.
+    const normalized = normalizedQuery.toLocaleLowerCase();
+    return TOKENS.filter((token) =>
+      `${token.symbol} ${token.name} ${token.mint}`.toLocaleLowerCase().includes(normalized),
+    );
   }
 }
 
@@ -130,30 +129,25 @@ export async function getTokenByMint(
   }
 
   try {
-    const response = await fetch(
-      `${TOKEN_SEARCH_URL}?query=${encodeURIComponent(mint)}`,
-      {
-        cache: "no-store",
-      }
-    );
+    const response = await fetch(`/api/tokens/search?query=${encodeURIComponent(mint)}`, { cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as { tokens?: (Token & { mint: string })[] };
 
-    if (!Array.isArray(data)) {
+    if (!Array.isArray(data.tokens)) {
       return null;
     }
 
-    const token = data.find(
+    const token = data.tokens.find(
       (item) =>
         item &&
-        item.id === mint &&
+        item.mint === mint &&
         typeof item.symbol === "string" &&
         typeof item.name === "string" &&
-        typeof item.decimals === "number"
+        Number.isInteger(item.decimals) && item.decimals >= 0 && item.decimals <= 255
     );
 
     if (!token) {
@@ -163,7 +157,7 @@ export async function getTokenByMint(
     return {
       symbol: token.symbol,
       name: token.name,
-      mint: token.id,
+      mint: token.mint,
       decimals: token.decimals,
     };
   } catch (error) {

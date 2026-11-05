@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useState,
   ReactNode,
 } from "react";
@@ -48,6 +49,9 @@ export function TokenProvider({
   const [selectedSide, setSelectedSide] =
     useState<TokenSide | null>(null);
   const [swapTokens, setSwapTokens] = useState<[typeof TOKENS[number], typeof TOKENS[number]]>([TOKENS[0], TOKENS[1]]);
+  const updateSwapTokens = useCallback((fromToken: (typeof TOKENS)[number], toToken: (typeof TOKENS)[number]) => {
+    setSwapTokens([fromToken, toToken]);
+  }, []);
   const selectSwapToken = (side: TokenSide, token: typeof TOKENS[number]) => {
     setSwapTokens(([fromToken, toToken]) => side === "from"
       ? [token, token.mint === toToken.mint ? fromToken : toToken]
@@ -64,7 +68,7 @@ export function TokenProvider({
         fromToken: swapTokens[0],
         toToken: swapTokens[1],
         selectSwapToken,
-        setSwapTokens: (fromToken, toToken) => setSwapTokens([fromToken, toToken]),
+        setSwapTokens: updateSwapTokens,
       }}
     >
       {children}

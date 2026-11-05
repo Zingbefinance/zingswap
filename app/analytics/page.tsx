@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { BarChart3, Search } from "lucide-react";
 import MainLayout from "@/components/layout/MainLayout";
-import AnalyticsChart, { type MarketCandle } from "../components/AnalyticsChart";
+import DexScreenerChart from "../components/DexScreenerChart";
 
 type Pair = {
   address: string;
@@ -22,13 +22,9 @@ export default function ChartPage() {
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [selectedAddress, setSelectedAddress] = useState("");
   const [period, setPeriod] = useState("24H");
-  const [candles, setCandles] = useState<MarketCandle[]>([]);
   const [searching, setSearching] = useState(false);
-  const [loadingCandles, setLoadingCandles] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [chartError, setChartError] = useState<string | null>(null);
   const searchRequest = useRef(0);
-  const candleRequest = useRef(0);
 
   async function searchToken(event?: FormEvent) {
     event?.preventDefault();
@@ -41,10 +37,8 @@ export default function ChartPage() {
     const requestId = ++searchRequest.current;
     setSearching(true);
     setSearchError(null);
-    setChartError(null);
     setPairs([]);
     setSelectedAddress("");
-    setCandles([]);
     try {
       const response = await fetch(`/api/analytics?action=search&query=${encodeURIComponent(value)}`);
       const result = await response.json();
@@ -69,45 +63,6 @@ export default function ChartPage() {
     return () => window.clearTimeout(initialSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!selectedAddress) return;
-    const requestId = ++candleRequest.current;
-    const controller = new AbortController();
-    // The effect starts an external request and reflects its loading state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingCandles(true);
-    setChartError(null);
-    setCandles([]);
-
-    const selected = pairs.find((pair) => pair.address === selectedAddress);
-    if (!selected?.tokenAddress) {
-      setChartError("L’adresse du token de cette paire est indisponible.");
-      setLoadingCandles(false);
-      return;
-    }
-
-    fetch(`/api/analytics?action=candles&pair=${encodeURIComponent(selectedAddress)}&token=${encodeURIComponent(selected.tokenAddress)}&period=${period}`, { signal: controller.signal })
-      .then(async (response) => {
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Impossible de charger l’historique.");
-        return result as { candles?: MarketCandle[]; error?: string };
-      })
-      .then((result) => {
-        if (requestId !== candleRequest.current) return;
-        setCandles(result.candles ?? []);
-        setChartError(result.error ?? null);
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted || requestId !== candleRequest.current) return;
-        setChartError(error instanceof Error ? error.message : "Impossible de charger l’historique.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted && requestId === candleRequest.current) setLoadingCandles(false);
-      });
-
-    return () => controller.abort();
-  }, [selectedAddress, period, pairs]);
 
   const selectedPair = pairs.find((pair) => pair.address === selectedAddress) ?? null;
 
@@ -177,7 +132,12 @@ export default function ChartPage() {
               </div>
             </section>
 
-            <AnalyticsChart data={candles} loading={loadingCandles} error={chartError} period={period} onPeriodChange={setPeriod} />
+            <DexScreenerChart
+              pairAddress={selectedPair.address}
+              pairName={`${selectedPair.base}/${selectedPair.quote}`}
+              period={period}
+              onPeriodChange={setPeriod}
+            />
           </>
         )}
 

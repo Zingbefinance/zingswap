@@ -25,7 +25,7 @@ const TOKEN_REGISTRY: Record<string, { symbol: string; name: string }> = {
   "DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263PB263": { symbol: "BONK", name: "Bonk" },
   JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: { symbol: "JUP", name: "Jupiter" },
   EKpQGSJtjMFqKZ6uJ3iM3Y6L6i9n9M2J7sKnzGWxZMF: { symbol: "WIF", name: "dogwifhat" },
-  Es9vMFrzaCERmJfrF4H2t6wQBaLtgBoQxGc1dQc5sK7: { symbol: "USDT", name: "Tether" },
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: { symbol: "USDT", name: "Tether USD" },
 };
 
 export default function useWalletInfo() {
