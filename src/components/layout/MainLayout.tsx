@@ -12,6 +12,7 @@ import {
   CandlestickChart,
   Wallet,
   Settings,
+  UsersRound,
 } from "lucide-react";
 
 interface Props {
@@ -24,6 +25,7 @@ const mobileMenu = [
   { icon: Droplets, label: "Liquidity", href: "/liquidity" },
   { icon: BarChart3, label: "Graphique", href: "/analytics" },
   { icon: Wallet, label: "Portfolio", href: "/portfolio" },
+  { icon: UsersRound, label: "Community", href: "/community/feed" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
@@ -42,10 +44,12 @@ export default function MainLayout({ children }: Props) {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur md:hidden">
-        <div className="grid grid-cols-6 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        <div className="grid grid-cols-7 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {mobileMenu.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href || (item.href === "/swap" && pathname === "/tokens");
+            const active = item.href === "/community/feed"
+              ? pathname.startsWith("/community")
+              : pathname === item.href || (item.href === "/swap" && pathname === "/tokens");
 
             return (
               <Link

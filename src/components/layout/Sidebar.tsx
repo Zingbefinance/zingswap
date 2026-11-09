@@ -10,6 +10,7 @@ import {
   CandlestickChart,
   Wallet,
   Settings,
+  UsersRound,
 } from "lucide-react";
 import { useLanguage } from "@/components/providers/LanguageContext";
 
@@ -40,6 +41,11 @@ const menu = [
     href: "/portfolio",
   },
   {
+    icon: UsersRound,
+    key: "community",
+    href: "/community/feed",
+  },
+  {
     icon: Settings,
     key: "settings",
     href: "/settings",
@@ -53,6 +59,7 @@ const labels = {
     analytics: "Graphique",
     trading: "Trading",
     portfolio: "Portefeuille",
+    community: "Community",
     settings: "Paramètres",
   },
   English: {
@@ -61,6 +68,7 @@ const labels = {
     analytics: "Analytics",
     trading: "Trading",
     portfolio: "Portfolio",
+    community: "Community",
     settings: "Settings",
   },
 };
@@ -78,7 +86,9 @@ export default function Sidebar() {
       <nav className="mt-10 space-y-3">
         {menu.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const active = item.href === "/community/feed"
+            ? pathname.startsWith("/community")
+            : pathname === item.href;
 
           return (
             <Link
