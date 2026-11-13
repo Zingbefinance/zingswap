@@ -63,16 +63,24 @@ export default function CommunityProjectsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <header className="mb-6">
-        <p className="text-sm font-medium uppercase tracking-wider text-cyan-300">
-          ZingSwap Community
-        </p>
-        <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-          Découvrir les projets
-        </h1>
-        <p className="mt-3 text-sm text-zinc-400">
-          Explore les projets crypto publiés dans la Community.
-        </p>
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-wider text-cyan-300">
+            ZingSwap Community
+          </p>
+          <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
+            Découvrir les projets
+          </h1>
+          <p className="mt-3 text-sm text-zinc-400">
+            Explore les projets crypto publiés dans la Community.
+          </p>
+        </div>
+        <Link
+          href="/community/projects/new"
+          className="inline-flex min-h-11 w-fit items-center justify-center rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+        >
+          Soumettre un projet
+        </Link>
       </header>
 
       <div className="mb-6">
