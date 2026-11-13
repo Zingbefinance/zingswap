@@ -8,6 +8,7 @@ export default function CommunityLayout({ children }: Readonly<{ children: React
           <Link href="/community" className="text-lg font-bold text-cyan-300">ZingSwap Community</Link>
           <nav aria-label="Community" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-zinc-300">
             <Link href="/community/feed" className="hover:text-white">Fil d’actualité</Link>
+            <Link href="/community/projects" className="hover:text-white">Projets</Link>
             <Link href="/community/wallet" className="hover:text-white">ZinWallet</Link>
             <Link href="/community/moderation" className="hover:text-white">Modération</Link>
             <Link href="/community/login" className="hover:text-white">Connexion</Link>
