@@ -8,9 +8,9 @@ import {
   Droplets,
   BarChart3,
   CandlestickChart,
+  UsersRound,
   Wallet,
   Settings,
-  UsersRound,
 } from "lucide-react";
 import { useLanguage } from "@/components/providers/LanguageContext";
 
@@ -24,6 +24,11 @@ const menu = [
     icon: CandlestickChart,
     key: "trading",
     href: "/trading",
+  },
+  {
+    icon: UsersRound,
+    key: "community",
+    href: "/community/feed",
   },
   {
     icon: Droplets,
@@ -41,11 +46,6 @@ const menu = [
     href: "/portfolio",
   },
   {
-    icon: UsersRound,
-    key: "community",
-    href: "/community/feed",
-  },
-  {
     icon: Settings,
     key: "settings",
     href: "/settings",
@@ -58,8 +58,8 @@ const labels = {
     liquidity: "Liquidité",
     analytics: "Graphique",
     trading: "Trading",
-    portfolio: "Portefeuille",
     community: "Community",
+    portfolio: "Portefeuille",
     settings: "Paramètres",
   },
   English: {
@@ -67,8 +67,8 @@ const labels = {
     liquidity: "Liquidity",
     analytics: "Analytics",
     trading: "Trading",
-    portfolio: "Portfolio",
     community: "Community",
+    portfolio: "Portfolio",
     settings: "Settings",
   },
 };
@@ -86,7 +86,7 @@ export default function Sidebar() {
       <nav className="mt-10 space-y-3">
         {menu.map((item) => {
           const Icon = item.icon;
-          const active = item.href === "/community/feed"
+          const active = item.key === "community"
             ? pathname.startsWith("/community")
             : pathname === item.href;
 
@@ -94,6 +94,8 @@ export default function Sidebar() {
             <Link
               key={item.key}
               href={item.href}
+              target={item.href.startsWith("https://") ? "_blank" : undefined}
+              rel={item.href.startsWith("https://") ? "noopener noreferrer" : undefined}
               className={`flex w-full items-center gap-4 rounded-xl px-4 py-3 transition ${
                 active
                   ? "bg-cyan-500 text-black"

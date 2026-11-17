@@ -10,9 +10,9 @@ import {
   Droplets,
   BarChart3,
   CandlestickChart,
+  UsersRound,
   Wallet,
   Settings,
-  UsersRound,
 } from "lucide-react";
 
 interface Props {
@@ -22,10 +22,10 @@ interface Props {
 const mobileMenu = [
   { icon: ArrowLeftRight, label: "Swap", href: "/swap" },
   { icon: CandlestickChart, label: "Trading", href: "/trading" },
+  { icon: UsersRound, label: "Community", href: "/community/feed" },
   { icon: Droplets, label: "Liquidity", href: "/liquidity" },
   { icon: BarChart3, label: "Graphique", href: "/analytics" },
   { icon: Wallet, label: "Portfolio", href: "/portfolio" },
-  { icon: UsersRound, label: "Community", href: "/community/feed" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
@@ -47,7 +47,7 @@ export default function MainLayout({ children }: Props) {
         <div className="grid grid-cols-7 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {mobileMenu.map((item) => {
             const Icon = item.icon;
-            const active = item.href === "/community/feed"
+            const active = item.label === "Community"
               ? pathname.startsWith("/community")
               : pathname === item.href || (item.href === "/swap" && pathname === "/tokens");
 
@@ -55,6 +55,8 @@ export default function MainLayout({ children }: Props) {
               <Link
                 key={item.label}
                 href={item.href}
+                target={item.href.startsWith("https://") ? "_blank" : undefined}
+                rel={item.href.startsWith("https://") ? "noopener noreferrer" : undefined}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 transition ${
                   active
